@@ -69,7 +69,11 @@
 {:else if album}
   <div class="release-layout">
     <aside class="release-aside">
-      <section class="release-summary">
+      <section
+        class="release-summary"
+        class:tinted={album.album_art_secondary_color}
+        style:--cover={album.album_art_secondary_color}
+      >
         <figure class="cover">
           {#if album.cover_art_url}
             <img src={album.cover_art_url} width="240" height="240" alt="{album.name} cover" />
@@ -79,10 +83,10 @@
         <!-- Плеера пока нет — оставляем пустой блок под будущий функционал -->
         <div class="controls" aria-hidden="true"></div>
 
-        <div class="album-meta">
+        <!-- <div class="album-meta">
           {#if album.song_pageviews}<span>{album.song_pageviews.toLocaleString("en-US")} plays</span>{/if}
           <span>{album.tracks.length} tracks</span>
-        </div>
+        </div> -->
       </section>
 
       <section class="release-tracklist">
@@ -171,20 +175,21 @@
         </dl>
 
         {#if album.album_art_primary_color || album.album_art_secondary_color}
-          <div class="color-swatches">
-            {#if album.album_art_primary_color}
-              <div class="color-swatch">
-                <span class="swatch-box" style="background: {album.album_art_primary_color}"></span>
-                <span class="swatch-hex">{album.album_art_primary_color}</span>
-              </div>
-            {/if}
-            {#if album.album_art_secondary_color}
-              <div class="color-swatch">
-                <span class="swatch-box" style="background: {album.album_art_secondary_color}"></span>
-                <span class="swatch-hex">{album.album_art_secondary_color}</span>
-              </div>
-            {/if}
-          </div>
+          <div class="release-footer">
+  {#if album.album_art_primary_color}
+    <div class="color-swatch">
+      <span class="swatch-box" style="background: {album.album_art_primary_color}"></span>
+      <span class="swatch-hex">{album.album_art_primary_color}</span>
+    </div>
+  {/if}
+  {#if album.album_art_secondary_color}
+    <div class="color-swatch">
+      <span class="swatch-box" style="background: {album.album_art_secondary_color}"></span>
+      <span class="swatch-hex">{album.album_art_secondary_color}</span>
+    </div>
+  {/if}
+  <span class="release-id">#{album.id}</span>
+</div>
         {/if}
       </article>
 

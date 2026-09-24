@@ -144,11 +144,15 @@ abbr {
     flex-direction: column;
     justify-content: space-evenly;
     align-items: center;
-    min-height: 380px;
+    min-height: 400px;
     padding-top: 50px;
     border-radius: 8px;
     background: var(--bg-card);
     user-select: none;
+}
+
+.release-summary.tinted {
+    background: linear-gradient(var(--cover), var(--bg-body) 120%);
 }
 
 .cover {
@@ -304,7 +308,7 @@ abbr {
 }
 
 .main-info {
-    min-height: 372px;
+    min-height: 400px;
 }
 
 .album-info h5 {
@@ -557,7 +561,7 @@ abbr {
 .album-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-    gap: 16px;
+    column-gap: 8px;
 }
 
 .artist-card {
@@ -673,9 +677,18 @@ abbr {
 
 /* ─────────────────────────── Цвета обложки (primary/secondary) ─────────────────────────── */
 
-.color-swatches {
+.release-footer {
     display: flex;
+    align-items: center;
     gap: 16px;
+    margin-top: auto;
+}
+
+.release-id {
+    margin-left: auto;
+    font-size: 12px;
+    font-family: monospace;
+    color: var(--text-soft);
 }
 
 .color-swatch {
@@ -685,16 +698,16 @@ abbr {
 }
 
 .swatch-box {
-    width: 20px;
-    height: 20px;
-    border-radius: 4px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    flex-shrink: 0;
+    width: 14px;
+    height: 14px;
+    border-radius: 2px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    /* flex-shrink: 0; */
 }
 
 .swatch-hex {
     font-size: 12px;
     font-family: monospace;
     color: var(--text-soft);
-    text-transform: uppercase;
+    /* text-transform: uppercase; */
 }
