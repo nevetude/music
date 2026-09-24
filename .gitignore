@@ -39,3 +39,8 @@ frontend/dist/
 Thumbs.db
 desktop.ini
 *:Zone.Identifier
+
+# Vite / Vim
+.vite/
+*.swp
+*.swo
