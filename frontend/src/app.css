@@ -1,0 +1,700 @@
+/* @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@100;300;400;500;700;900&display=swap'); */
+
+/* Файлы шрифтов положи в frontend/public/fonts/ — Vite отдаёт /public как корень */
+@font-face {
+    font-family: "Roboto";
+    src: url("/fonts/Roboto-Regular.ttf") format("truetype");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Roboto";
+    src: url("/fonts/Roboto-Medium.ttf") format("truetype");
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Roboto";
+    src: url("/fonts/Roboto-Bold.ttf") format("truetype");
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
+:root {
+    /* Цветовая палитра */
+    --bg-body: #040404;
+    --bg-main: #080808;
+    --bg-card: #111111;
+    --bg-hover: rgba(80, 80, 80, 0.18);
+    --cover: #9e1500;
+
+    --text-main: #ccc;
+    --text-muted: #a0a0a0;
+    --text-soft: #606060;
+    --text-meta: #808080;
+    --title: #ffffff;
+    --artist: #e4412c;
+    --accent: #ffbfb5;
+    --badge: #1b1b1b;
+    --rating: rgba(181, 255, 111, 0.92);
+
+    color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+    --bg-body: #d1d1d1;
+    --bg-main: #ddd;
+    --bg-card: #eee;
+    --bg-hover: rgba(0, 0, 0, 0.05);
+    --cover: #d0a0ff;
+
+    --text-main: #111;
+    --text-muted: #666666;
+    --text-soft: #444444;
+
+    --title: #222;
+    --artist: #6a1b9a;
+    --accent: #5127a5;
+    --badge: #dddddd;
+
+    color-scheme: light;
+}
+
+/* Базовые стили */
+::selection {
+    color: #fff;
+    background-color: #444;
+}
+
+*,
+*::before,
+*::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+    /* transition: background-color 0.5s, color 0.5s; */
+}
+
+body {
+    font-family: "Roboto", system-ui, sans-serif;
+    background: var(--bg-body);
+    color: var(--text-soft);
+}
+
+body, a {
+  transition: background-color .3s, color .3s;
+}
+
+/* Layout */
+main {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 8px;
+    border-radius: 8px;
+    background: var(--bg-main);
+    min-height: calc(100vh - 60px);
+}
+
+.release-layout {
+    display: grid;
+    grid-template-columns: 400px 1fr;
+    gap: 8px;
+}
+
+header {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    font-size: 12px;
+    height: 60px;
+    padding: 0 16px;
+    background: var(--bg-card);
+}
+
+/* Ссылки */
+a {
+    color: var(--text-main);
+    text-decoration: none;
+    padding: 4px;
+    border-radius: 4px;
+}
+
+a:hover {
+    background-color: var(--bg-hover);
+    color: var(--title);
+}
+
+abbr {
+    text-decoration: none;
+}
+
+.accent {
+    color: var(--accent);
+}
+
+/* Release summary + Cover */
+.release-summary {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-evenly;
+    align-items: center;
+    min-height: 380px;
+    padding-top: 50px;
+    border-radius: 8px;
+    background: var(--bg-card);
+    user-select: none;
+}
+
+.cover {
+    width: 240px;
+    height: 240px;
+    overflow: hidden;
+    border-radius: 8px;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5);
+}
+
+.cover img {
+    width: 100%;
+    display: block;
+}
+
+.controls {
+    width: 240px;
+    height: 40px;
+    background: var(--bg-card);
+    border-radius: 8px;
+}
+
+.album-meta {
+    width: 220px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-meta);
+}
+
+/* Tracklist */
+.release-tracklist {
+    background: var(--bg-card);
+    border-radius: 8px;
+}
+
+.tracklist {
+    list-style: none;
+    padding: 8px;
+}
+
+.track {
+    display: grid;
+    /* 140px — фиксированная (не minmax!) ширина колонки под продюсеров.
+       minmax(min,max) здесь была ошибкой: такие треки при распределении
+       свободного места дотягиваются до max ПЕРЕД тем, как 1fr получает
+       остаток — из-за этого заголовок трека обрезался раньше времени. */
+    grid-template-columns: 24px 28px minmax(0, 1fr) auto;
+    align-items: center;
+    padding: 10px 8px;
+    border-radius: 8px;
+    cursor: pointer;
+    overflow: hidden;
+}
+
+.track:hover {
+    background: var(--bg-hover);
+}
+
+.track-num {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 11px;
+    color: var(--text-soft);
+    /* text-align: center; */
+    margin-right: 8px;
+}
+
+.tracklist-cover {
+    width: 24px;
+    height: 24px;
+    object-fit: cover;
+    border-radius: 4px;
+    /* border: 1px solid #cacaca; */
+}
+
+.track-title {
+    overflow: hidden;
+}
+
+.track-title a {
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 14px;
+    line-height: 1.3;
+}
+
+.track-feat {
+    /* Темнее названия трека, чтобы визуально отделить (feat. ...) */
+    color: var(--text-soft);
+    font-weight: normal;
+}
+
+.track-instrumental {
+    color: var(--text-meta);
+    font-weight: normal;
+    font-style: italic;
+}
+
+.track-meta {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    font-size: 12px;
+}
+
+.track-producer {
+    display: block;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    color: var(--text-meta);
+}
+
+.track-time {
+    color: var(--text-soft);
+    font-size: 11px;
+}
+
+/* Main info & Album info */
+.release-aside {
+    display: grid;
+    grid-template-rows: auto 1fr;
+    gap: 8px;
+    align-content: start;
+}
+
+.release-details {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Блок, который дорастает до высоты левой колонки — назначается в Album.svelte
+   (Credits, если есть; иначе Description; cover arts никогда). */
+.album-info.stretch {
+    flex: 1 1 auto;
+}
+
+.main-info,
+.album-info {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 20px;
+    background: var(--bg-card);
+    border-radius: 8px;
+    color: var(--text-soft);
+}
+
+.main-info {
+    min-height: 372px;
+}
+
+.album-info h5 {
+    color: var(--text-main);
+}
+
+.release-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.release-title {
+    color: var(--title);
+}
+
+.release-artist {
+    font-weight: bold;
+    color: var(--text-main);
+}
+
+.album-ratings {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    user-select: none;
+}
+
+.release-rating {
+    height: 28px;
+    width: 32px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: bold;
+    font-size: 14px;
+    border-radius: 4px;
+    background: var(--rating);
+    color: black;
+}
+
+.rating-badge {
+    padding: 6px 8px;
+    font-size: 12px;
+    border: 1px solid var(--bg-main);
+    background: var(--badge);
+    border-radius: 4px;
+    color: var(--text-muted);
+}
+
+.release-meta {
+    display: grid;
+    grid-template-columns: 100px 1fr;
+    gap: 12px;
+}
+
+.release-meta dt {
+    font-size: 13px;
+    color: rgb(160, 160, 160);
+    line-height: 1.6;
+    padding-left: 4px;
+}
+
+.release-meta dt a {
+    padding: 0;
+    color: rgb(160, 160, 160);
+}
+
+.release-meta dt a:hover {
+    color: var(--title);
+}
+
+.release-meta dd {
+    color: var(--text-main);
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+.release-meta dd a {
+    white-space: nowrap;
+    color: var(--text-main);
+}
+
+.flag {
+    width: 16px;
+    aspect-ratio: 5/3;
+}
+
+.description {
+    font-size: 13px;
+    line-height: 1.6;
+    padding: 14px;
+    border-radius: 8px;
+    background: var(--bg-main);
+    color: var(--text-main);
+    overflow: hidden;
+    transition: max-height 0.3s ease;
+}
+
+.show-more-btn {
+    align-self: flex-start;
+    padding: 4px 0;
+    border: none;
+    background: transparent;
+    color: var(--text-meta);
+    font-size: 12px;
+    cursor: pointer;
+    text-decoration: underline;
+}
+
+.show-more-btn:hover {
+    color: var(--title);
+}
+
+/* Physical releases */
+.physical-gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(90px, auto));
+    gap: 8px;
+    justify-content: start;
+}
+
+
+.physical-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: center;
+    transition: transform 0.2s ease;
+}
+
+.physical-item img {
+    width: 100px;
+    height: 100px;
+    object-fit: cover;
+    border-radius: 4px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+    background: var(--bg-card);
+}
+
+.format-label {
+    font-size: 12px;
+    color: var(--text-main);
+    text-align: center;
+    line-height: 1;
+    margin-top: 8px;
+}
+
+.release-info {
+    font-size: 11px;
+    color: var(--text-soft);
+    text-align: center;
+}
+
+/* Theme switcher */
+.theme-switcher {
+    margin-left: auto;
+    position: relative;
+    width: 40px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.theme-switcher label {
+    position: absolute;
+    inset: 0;
+    background: #ccc;
+    border-radius: 20px;
+}
+
+.theme-switcher label::after {
+    content: "";
+    position: absolute;
+    top: 3px;
+    left: 3px;
+    width: 14px;
+    height: 14px;
+    background: #fff;
+    border-radius: 50%;
+}
+
+#theme-toggle {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+#theme-toggle:checked+label {
+    background: #cecece;
+}
+
+#theme-toggle:checked+label::after {
+    transform: translateX(20px);
+}
+
+/* Responsive */
+@media screen and (max-width: 900px) {
+    .physical-gallery {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media screen and (max-width: 800px) {
+    .release-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .physical-gallery {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media screen and (max-width: 380px) {
+    .physical-gallery {
+        grid-template-columns: 1fr;
+    }
+
+    .physical-item img {
+        width: 110px;
+        height: 110px;
+    }
+}
+
+.block {
+    padding-bottom: 12px;
+    border-bottom: 1px solid #222;
+}
+/* ─────────────────────────── Списки: артисты / альбомы ─────────────────────────── */
+
+.page-block {
+    padding: 20px;
+    margin-bottom: 8px;
+    background: var(--bg-card);
+    border-radius: 8px;
+}
+
+.page-title {
+    color: var(--title);
+    font-size: 16px;
+    margin-bottom: 16px;
+}
+
+.text-soft {
+    color: var(--text-soft);
+    font-size: 13px;
+}
+
+.artist-grid,
+.album-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 16px;
+}
+
+.artist-card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px;
+    border-radius: 8px;
+    color: var(--text-main);
+    text-align: center;
+    align-items: center;
+}
+
+.album-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 12px;
+    border-radius: 8px;
+    color: var(--text-main);
+    text-align: left;
+    align-items: stretch;
+}
+
+.artist-card:hover,
+.album-card:hover {
+    background: var(--bg-hover);
+    color: var(--title);
+}
+
+.artist-card-avatar,
+.album-card-cover {
+    width: 100%;
+    aspect-ratio: 1;
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--bg-main);
+}
+
+.artist-card-avatar {
+    border-radius: 50%;
+}
+
+.artist-card-avatar img,
+.album-card-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.artist-card-name {
+    font-size: 13px;
+    font-weight: 500;
+    text-align: center;
+}
+
+.album-card-name {
+    font-size: 13px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+.album-card-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--text-meta);
+}
+
+.album-card-artists {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.album-card-year {
+    flex-shrink: 0;
+}
+
+.artist-card-followers {
+    font-size: 11px;
+    color: var(--text-meta);
+}
+
+.artist-header {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 16px;
+}
+
+.artist-header-avatar {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.lyrics-placeholder {
+    font-style: italic;
+    color: var(--text-meta);
+}
+
+.release-artist-line {
+    display: block;
+}
+
+/* ─────────────────────────── Цвета обложки (primary/secondary) ─────────────────────────── */
+
+.color-swatches {
+    display: flex;
+    gap: 16px;
+}
+
+.color-swatch {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.swatch-box {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    flex-shrink: 0;
+}
+
+.swatch-hex {
+    font-size: 12px;
+    font-family: monospace;
+    color: var(--text-soft);
+    text-transform: uppercase;
+}

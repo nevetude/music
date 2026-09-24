@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Genius — artists and albums" />
+    <title>Genius</title>
+    <script>
+        // Применяем сохранённую тему до отрисовки, чтобы избежать мигания (FOUC)
+        (function () {
+            var saved = localStorage.getItem("theme");
+            if (saved) document.documentElement.setAttribute("data-theme", saved);
+        })();
+    </script>
+    <link rel="preload" href="/fonts/Roboto-Regular.ttf" as="font" type="font/ttf" crossorigin />
+    <link rel="preload" href="/fonts/Roboto-Bold.ttf" as="font" type="font/ttf" crossorigin />
+    <style>
+        body {
+            background: #040404;
+            color: #ccc;
+            font-family: Roboto, system-ui, sans-serif;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.js"></script>
+</body>
+
+</html>
