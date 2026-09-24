@@ -76,7 +76,7 @@ async def fetch_songs_with_client(client: httpx.AsyncClient, song_ids: list[int]
         return_exceptions=True,
     )
     songs = []
-    for song_id, result in zip(song_ids, results):
+    for song_id, result in zip(song_ids, results, strict=True):
         if isinstance(result, Exception):
             print(f"      ✗ песня {song_id}: ошибка — {result}")
             continue

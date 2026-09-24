@@ -1,7 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session
+from fastapi import APIRouter, HTTPException
 
-from ..database import get_session
+from ..database import SessionDep
 from ..repository import albums as albums_repo
 from ..repository import artists as repo
 from ..schemas import AlbumListItem, ArtistBrief, ArtistDetail, ArtistListItem
@@ -10,7 +9,7 @@ router = APIRouter(prefix="/api/artists", tags=["artists"])
 
 
 @router.get("", response_model=list[ArtistListItem])
-def list_artists(session: Session = Depends(get_session)):
+def list_artists(session: SessionDep):
     artists = repo.list_artists(session)
     with_albums = repo.artist_ids_with_albums(session)
     return [
@@ -20,7 +19,7 @@ def list_artists(session: Session = Depends(get_session)):
 
 
 @router.get("/{artist_id}", response_model=ArtistDetail)
-def get_artist(artist_id: int, session: Session = Depends(get_session)):
+def get_artist(artist_id: int, session: SessionDep):
     artist = repo.get_artist(session, artist_id)
     if artist is None:
         raise HTTPException(status_code=404, detail="Артист не найден")

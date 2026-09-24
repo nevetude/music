@@ -1,7 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session
+from fastapi import APIRouter, HTTPException
 
-from ..database import get_session
+from ..database import SessionDep
 from ..lookups import country_name, language_name
 from ..repository import songs as repo
 from ..schemas import AlbumListItem, ArtistBrief, SongDetail
@@ -10,7 +9,7 @@ router = APIRouter(prefix="/api/songs", tags=["songs"])
 
 
 @router.get("/{song_id}", response_model=SongDetail)
-def get_song(song_id: int, session: Session = Depends(get_session)):
+def get_song(song_id: int, session: SessionDep):
     song = repo.get_song(session, song_id)
     if song is None:
         raise HTTPException(status_code=404, detail="Песня не найдена")

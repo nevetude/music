@@ -1,8 +1,6 @@
 """Единая схема БД: пишет ingest (парсер), читает read-API.
 Один файл моделей — единственный источник правды о структуре БД."""
 
-from __future__ import annotations
-
 from sqlalchemy import JSON, Column
 from sqlmodel import Field, SQLModel
 
@@ -173,7 +171,7 @@ class Credit(SQLModel, table=True):
 
 
 class AlbumPerformance(SQLModel, table=True):
-    """Роль артиста/компании при альбоме из song_performances (Featuring, Producers, Writers, Label)."""
+    """Роль артиста/компании при альбоме из song_performances (Featuring, Producers, Label...)."""
 
     __tablename__ = "album_performances"
 

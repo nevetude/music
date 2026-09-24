@@ -36,7 +36,9 @@ frontend/
 ```bash
 make install
 ```
-Эквивалент `cd backend && uv sync` + `cd frontend && npm install`.
+Эквивалент `cd backend && uv sync` + `cd frontend && bun install`.
+
+Требования: [uv](https://docs.astral.sh/uv/) (сам скачает Python 3.14 по `.python-version`) и [bun](https://bun.sh/).
 
 Положи файлы шрифтов в `frontend/public/fonts/`
 (Roboto-Regular.ttf, Roboto-Medium.ttf, Roboto-Bold.ttf).
@@ -67,7 +69,7 @@ make web   # Vite dev — http://localhost:5173 (проксирует /api на 
 - `GET /api/albums/{id}` — альбом целиком (треки, жанры, credits, страна/язык, обложки)
 - `GET /api/songs/{id}` — трек целиком (артисты, жанры, credits, альбомы, где встречается)
 
-`make lint` — `ruff check` для backend.
+`make lint` — `ruff check` и `ruff format --check` для backend; `make fix` — автоисправление и форматирование.
 
 ## Почему так мало переходов между страницами
 

@@ -1,7 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session
+from fastapi import APIRouter, HTTPException
 
-from ..database import get_session
+from ..database import SessionDep
 from ..lookups import country_name, language_name
 from ..repository import albums as repo
 from ..schemas import AlbumDetail, ArtistBrief, CoverArtItem, TrackItem
@@ -20,7 +19,7 @@ def format_album_type(value: str | None) -> str | None:
 
 
 @router.get("/{album_id}", response_model=AlbumDetail)
-def get_album(album_id: int, session: Session = Depends(get_session)):
+def get_album(album_id: int, session: SessionDep):
     album = repo.get_album(session, album_id)
     if album is None:
         raise HTTPException(status_code=404, detail="Альбом не найден")

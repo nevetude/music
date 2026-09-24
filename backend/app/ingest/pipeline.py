@@ -2,8 +2,6 @@
 но upsert/link-паттерны вынесены в helpers.py — вместо восьми почти
 одинаковых блоков "get -> add или setattr" здесь только сами данные."""
 
-from __future__ import annotations
-
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from ..models import (
@@ -252,7 +250,7 @@ async def add_relationships(
 async def add_album_performances(
     session: AsyncSession, album_id: int, song_performances: list[dict]
 ) -> None:
-    """song_performances альбома -> таблица album_performances (Featuring, Producers, Writers, Label)."""
+    """song_performances альбома -> album_performances (Featuring, Producers, Writers, Label)."""
     for entry in song_performances:
         role = entry.get("label")
         for artist in entry.get("artists", []):

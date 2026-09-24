@@ -40,7 +40,7 @@ def get_album_genres(session: Session, album_id: int) -> list[str]:
 
 
 def get_album_performances(session: Session, album_id: int) -> dict[str, list[str]]:
-    """AlbumPerformance -> {role: [имена]}, сохраняя роли из Genius как есть (Producers, Featuring, Label...)."""
+    """AlbumPerformance -> {role: [имена]}; роли Genius сохраняются как есть."""
     statement = (
         select(AlbumPerformance.role, Artist.name)
         .join(Artist, Artist.id == AlbumPerformance.artist_id)

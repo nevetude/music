@@ -2,17 +2,13 @@
 save_* функции руками писать "session.get -> если None add иначе setattr",
 это делается тут один раз."""
 
-from __future__ import annotations
-
-from typing import Any, TypeVar
+from typing import Any
 
 from sqlmodel import SQLModel, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-ModelT = TypeVar("ModelT", bound=SQLModel)
 
-
-async def upsert(
+async def upsert[ModelT: SQLModel](
     session: AsyncSession, model: type[ModelT], pk: dict[str, Any], fields: dict[str, Any]
 ) -> ModelT:
     """Обновляет строку по первичному ключу или создаёт новую.
@@ -28,7 +24,9 @@ async def upsert(
     return obj
 
 
-async def link(session: AsyncSession, model: type[ModelT], **pk_fields: Any) -> None:
+async def link[ModelT: SQLModel](
+    session: AsyncSession, model: type[ModelT], **pk_fields: Any
+) -> None:
     """Создаёт строку в чистой linking-таблице (составной PK, без доп. полей),
     если такой связи ещё нет. Идемпотентно."""
     pk_value = tuple(pk_fields.values())
@@ -37,7 +35,9 @@ async def link(session: AsyncSession, model: type[ModelT], **pk_fields: Any) -> 
         session.add(model(**pk_fields))
 
 
-async def get_or_create(session: AsyncSession, model: type[ModelT], **match_fields: Any) -> None:
+async def get_or_create[ModelT: SQLModel](
+    session: AsyncSession, model: type[ModelT], **match_fields: Any
+) -> None:
     """Для таблиц с суррогатным id, где уникальность — это комбинация полей
     (Performance, Credit, AlbumPerformance, *Relationship). Ищет через SELECT,
     а не по PK, поэтому дороже, чем link(), но здесь иначе никак."""
