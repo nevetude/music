@@ -9,15 +9,15 @@ Makefile
 backend/
   app/
     models.py         # SQLModel-схема — общий контракт для записи и чтения
-    database.py        # sync engine + Session — для read-API
+    database.py        # единый sync engine + Session + init_db() — и для парсера, и для API
+    deps.py             # FastAPI-зависимость SessionDep (отдельно, чтобы парсер не тянул FastAPI)
     config.py           # pydantic-settings
     schemas.py           # Pydantic v2 — response-модели
     repository/           # read-only запросы (используются роутерами)
     routers/                # FastAPI эндпоинты
     ingest/                  # write-путь: бывшие db.py + genius_parser.py
       helpers.py              # generic upsert()/link()/get_or_create()
-      database.py               # async engine (aiosqlite) — та же БД, другой драйвер
-      genius_client.py            # HTTP-запросы к Genius API
+      genius_client.py            # HTTP-запросы к Genius API (единственное async-место)
       pipeline.py                  # upsert_*, ingest_song/album, save_*
       commands.py                   # parse_artist/parse_song/parse_album/parse_full
       cli.py                          # точка входа для `make parse`
@@ -25,11 +25,11 @@ frontend/
   src/                    # Svelte 5 + Vite, svelte-spa-router (SPA, без перезагрузок)
 ```
 
-Модели теперь одни на весь проект: `app/models.py` пишет `ingest/pipeline.py`
-(асинхронно, через `ingest/database.py`) и читает `repository/*`
-(синхронно, через `app/database.py`). Это два разных `Engine` на один и
-тот же файл БД — SQLite это позволяет, разные драйверы (`sqlite3` vs
-`aiosqlite`) просто открывают одно и то же соединение с диском.
+Модели и подключение к БД теперь одни на весь проект: `app/models.py` пишет
+`ingest/pipeline.py` и читает `repository/*`, и оба ходят через один sync-`Engine`
+из `app/database.py`. Async остался только там, где он нужен, — в сетевой части
+парсера (`ingest/genius_client.py`: параллельные запросы через `asyncio.gather`);
+запись в БД синхронная.
 
 ## Установка
 
@@ -128,7 +128,7 @@ albums» (не full, но есть хотя бы один альбом) → «Ot
 ## Известное упрощение
 
 `ingest/commands.py` (`parse_full`, `parse_album`) открывает отдельную
-`AsyncSession` на каждый альбом (несколько commit'ов за прогон), а не
+`Session` на каждый альбом (несколько commit'ов за прогон), а не
 одну сессию на весь запуск — чтобы частичный сбой на середине
 дискографии не терял уже загруженные альбомы. Это тот же компромисс,
 что был в исходном `db.py`/`genius_parser.py`, просто явно вынесенный

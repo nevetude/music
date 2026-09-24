@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 
-from ..database import SessionDep
+from ..deps import SessionDep
 from ..lookups import country_name, language_name
 from ..repository import albums as repo
 from ..schemas import AlbumDetail, ArtistBrief, CoverArtItem, TrackItem

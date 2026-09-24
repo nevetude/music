@@ -174,7 +174,7 @@
 
           <!-- Genres — всегда последними -->
           {#if album.genres.length > 0}
-            <dt>Genres</dt>
+            <dt>Genre</dt>
             <dd class="genres">{album.genres.join(", ")}</dd>
           {/if}
         </dl>
