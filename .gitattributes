@@ -1,0 +1,14 @@
+# Все текстовые файлы хранятся с LF-окончаниями строк (и в репозитории, и в рабочей копии).
+# Это убирает CRLF/LF-путаницу между Windows и WSL.
+* text=auto eol=lf
+
+# Бинарные файлы — не трогать
+*.ttf   binary
+*.woff  binary
+*.woff2 binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.ico   binary
