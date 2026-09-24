@@ -1,6 +1,7 @@
 <script>
   import { link } from "svelte-spa-router";
   import { api } from "../lib/api.js";
+  import { formatReleaseDate } from "../lib/format.js";
 
   let { params } = $props();
 
@@ -59,7 +60,7 @@
         <dl class="release-meta">
           {#if song.release_date}
             <dt>Released</dt>
-            <dd>{song.release_date}</dd>
+            <dd>{formatReleaseDate(song.release_date)}</dd>
           {/if}
 
           {#if song.country}

@@ -1,6 +1,11 @@
 <script>
   import { link } from "svelte-spa-router";
   import { api } from "../lib/api.js";
+  import { formatReleaseDate, truncateNameList } from "../lib/format.js";
+
+  // 140px — ширина .track-meta 4-й колонки (см. app.css), минус gap между
+  // track-producer и track-time (12px) и небольшой запас на подпиксельные округления.
+  const PRODUCER_COLUMN_WIDTH = 124;
 
   let { params } = $props();
 
@@ -103,11 +108,11 @@
                 <a href="/songs/{track.song_id}" use:link>
                   {track.title}{#if track.featuring.length > 0}<span class="track-feat"
                       >&nbsp;(feat. {track.featuring.join(", ")})</span
-                    >{/if}{#if track.instrumental}<span class="track-instrumental">&nbsp;Instrumental</span>{/if}
+                    >{/if}
                 </a>
               </span>
               <div class="track-meta">
-                <span class="track-producer">{track.producers.join(", ")}</span>
+                <span class="track-producer">{truncateNameList(track.producers, PRODUCER_COLUMN_WIDTH)}</span>
                 <span class="track-time"></span>
               </div>
             </li>
@@ -128,7 +133,7 @@
           </h2>
           <div class="album-ratings">
             <!-- реального рейтинга пока нет — заглушка на будущее -->
-            <span class="rating-badge">—</span>
+            <span class="rating-badge">10</span>
           </div>
         </div>
 
@@ -149,7 +154,7 @@
 
           {#if album.release_date}
             <dt>Released</dt>
-            <dd>{album.release_date}</dd>
+            <dd>{formatReleaseDate(album.release_date)}</dd>
           {/if}
 
           {#if album.country}

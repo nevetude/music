@@ -245,7 +245,7 @@ abbr {
 
 .track-feat {
     /* Темнее названия трека, чтобы визуально отделить (feat. ...) */
-    color: var(--text-soft);
+    color: #aaaaaa;
     font-weight: normal;
 }
 
@@ -351,12 +351,12 @@ abbr {
 }
 
 .rating-badge {
-    padding: 6px 8px;
+    padding: 4px 8px;
     font-size: 12px;
-    border: 1px solid var(--bg-main);
-    background: var(--badge);
+    font-weight: bold;
+    background: rgb(159, 255, 70);
     border-radius: 4px;
-    color: var(--text-muted);
+    color: black;
 }
 
 .release-meta {
@@ -399,10 +399,12 @@ abbr {
 
 .description {
     font-size: 13px;
-    line-height: 1.6;
-    padding: 14px;
-    border-radius: 8px;
-    background: var(--bg-main);
+    /* line-height: 1.6; */
+    /* padding: 14px; */
+    /* border-radius: 8px; */
+    /* background: var(--bg-main); */
+    background-color: rgb(17, 17, 17)
+;
     color: var(--text-main);
     overflow: hidden;
     transition: max-height 0.3s ease;
@@ -416,10 +418,13 @@ abbr {
     color: var(--text-meta);
     font-size: 12px;
     cursor: pointer;
-    text-decoration: underline;
+    /* text-decoration: underline; */
+    border-radius: 8px;
+    padding: 6px 8px ;
 }
 
 .show-more-btn:hover {
+    background-color: #1a1a1a;
     color: var(--title);
 }
 
