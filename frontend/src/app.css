@@ -195,17 +195,24 @@ abbr {
 }
 
 .track {
+    padding: 0;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.track-link {
     display: grid;
-    /* 140px — фиксированная (не minmax!) ширина колонки под продюсеров.
-       minmax(min,max) здесь была ошибкой: такие треки при распределении
-       свободного места дотягиваются до max ПЕРЕД тем, как 1fr получает
-       остаток — из-за этого заголовок трека обрезался раньше времени. */
     grid-template-columns: 24px 28px minmax(0, 1fr) auto;
     align-items: center;
     padding: 10px 8px;
-    border-radius: 8px;
     cursor: pointer;
-    overflow: hidden;
+    color: inherit;
+    text-decoration: none;
+}
+
+.track-link:hover,
+.track:has(.track-link:hover) {
+    background: var(--bg-hover);
 }
 
 .track:hover {
@@ -231,7 +238,14 @@ abbr {
 }
 
 .track-title {
+    display: block;
     overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 14px;
+    line-height: 1.3;
+    color: var(--text-main)
+
 }
 
 .track-title a {

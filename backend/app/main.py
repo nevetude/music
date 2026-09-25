@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .routers import albums, artists, songs
 
-app = FastAPI(title="Genius Read API")
+app = FastAPI(title="API")
 
 app.add_middleware(
     CORSMiddleware,

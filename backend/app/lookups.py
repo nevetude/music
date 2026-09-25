@@ -14,6 +14,7 @@ LANGUAGES: dict[str, tuple[str, str]] = {
     "ja": ("Japanese", "Japan"),
     "ko": ("Korean", "South Korea"),
     "zh": ("Chinese", "China"),
+    "sv": ("Swedish", "Sweden"),
 }
 
 

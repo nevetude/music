@@ -98,23 +98,23 @@
         <ol role="list" class="tracklist">
           {#each album.tracks as track (track.song_id)}
             <li class="track">
-              <span class="track-num">{track.number ?? ""}</span>
-              {#if track.cover_thumbnail_url}
-                <img src={track.cover_thumbnail_url} class="tracklist-cover" alt="{track.title} cover" />
-              {:else}
-                <span class="tracklist-cover"></span>
-              {/if}
-              <span class="track-title">
-                <a href="/songs/{track.song_id}" use:link>
+              <a href="/songs/{track.song_id}" use:link class="track-link">
+                <span class="track-num">{track.number ?? ""}</span>
+                {#if track.cover_thumbnail_url}
+                  <img src={track.cover_thumbnail_url} class="tracklist-cover" alt="{track.title} cover" />
+                {:else}
+                  <span class="tracklist-cover"></span>
+                {/if}
+                <span class="track-title">
                   {track.title}{#if track.featuring.length > 0}<span class="track-feat"
                       >&nbsp;(feat. {track.featuring.join(", ")})</span
                     >{/if}
-                </a>
-              </span>
-              <div class="track-meta">
-                <span class="track-producer">{truncateNameList(track.producers, PRODUCER_COLUMN_WIDTH)}</span>
-                <span class="track-time"></span>
-              </div>
+                </span>
+                <div class="track-meta">
+                  <span class="track-producer">{truncateNameList(track.producers, PRODUCER_COLUMN_WIDTH)}</span>
+                  <span class="track-time"></span>
+                </div>
+              </a>
             </li>
           {/each}
         </ol>
