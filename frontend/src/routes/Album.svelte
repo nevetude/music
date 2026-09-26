@@ -1,11 +1,7 @@
 <script>
   import { link } from "svelte-spa-router";
   import { api } from "../lib/api.js";
-  import { formatReleaseDate, truncateNameList } from "../lib/format.js";
-
-  // 140px — ширина .track-meta 4-й колонки (см. app.css), минус gap между
-  // track-producer и track-time (12px) и небольшой запас на подпиксельные округления.
-  const PRODUCER_COLUMN_WIDTH = 124;
+  import { formatReleaseDate } from "../lib/format.js";
 
   let { params } = $props();
 
@@ -13,29 +9,24 @@
   let loading = $state(true);
   let error = $state(null);
 
-  // ── Аккордеон описания: сворачиваем до ~2 строк, кнопка "Show more" раскрывает
-  // плавно (max-height транзишен), контейнер — обычный блок в потоке, поэтому
-  // соседи снизу естественно отодвигаются при расширении, без доп. кода.
-  const DESCRIPTION_COLLAPSED_HEIGHT = 70; // px, соответствует ~2 строкам текста + паддингам .description
+  const DESCRIPTION_COLLAPSED_HEIGHT = 70;
+
   let descRef = $state(null);
   let descFullHeight = $state(0);
   let descExpanded = $state(false);
   let descNeedsToggle = $derived(descFullHeight > DESCRIPTION_COLLAPSED_HEIGHT + 4);
 
   $effect(() => {
-    // Зависим и от текста, и от самого descRef: на первом рендере bind:this
-    // мог сработать позже этого эффекта — без явной зависимости от descRef
-    // измерение проходило бы вхолостую (по null) и больше не пересчитывалось.
     void album?.description_preview;
     void descRef;
+
     descExpanded = false;
+
     queueMicrotask(() => {
       if (descRef) descFullHeight = descRef.scrollHeight;
     });
   });
 
-  // ── Какой из article.album-info должен "дорастать" до высоты левой колонки.
-  // Приоритет: Credits, иначе Description. Cover arts никогда не растягиваем.
   let stretchBlock = $derived(
     album && Object.keys(album.credits).length > 0
       ? "credits"
@@ -47,6 +38,7 @@
   $effect(() => {
     loading = true;
     error = null;
+
     api
       .getAlbum(params.id)
       .then((data) => (album = data))
@@ -54,17 +46,137 @@
       .finally(() => (loading = false));
   });
 
-  // Порядок ролей в блоке credits — как в оригинальном макете (Producers, Featuring, ...).
-  // Label сюда не попадает — бэкенд отдаёт его отдельным полем в основной блок.
-  const roleOrder = ["Producer", "Producers", "Featuring", "Writer", "Writers", "Distributor"];
+  const roleOrder = [
+    "Producer",
+    "Producers",
+    "Featuring",
+    "Writer",
+    "Writers",
+    "Distributor",
+  ];
+
   function sortedRoles(credits) {
     const keys = Object.keys(credits);
+
     return keys.sort((a, b) => {
       const ia = roleOrder.indexOf(a);
       const ib = roleOrder.indexOf(b);
+
       return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
     });
   }
+
+function fitTrackRow(node, producers) {
+  const title = node.querySelector(".track-title");
+  const producer = node.querySelector(".track-producer");
+
+  if (!title || !producer || !producers?.length) return;
+
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  const gap = 12;
+
+  function measure(element, text) {
+    ctx.font = getComputedStyle(element).font;
+    return ctx.measureText(text).width;
+  }
+
+  function update() {
+    const rowWidth = node.clientWidth;
+
+    const titleText = title.textContent.trim();
+    const titleWidth = measure(title, titleText);
+
+    const firstProducer = producers[0];
+    const firstProducerWidth = measure(producer, firstProducer);
+
+    /*
+     * Приоритеты:
+     *
+     * 1. Первый продюсер показывается всегда целиком.
+     * 2. Если полное название трека помещается — сохраняем его целиком.
+     * 3. Всё оставшееся место отдаём дополнительным продюсерам.
+     * 4. Если название само слишком длинное — оно сокращается,
+     *    но первый продюсер всё равно остаётся целиком.
+     */
+
+    const titleCanFit =
+      titleWidth + gap + firstProducerWidth <= rowWidth;
+
+    const reservedTitleWidth = titleCanFit
+      ? titleWidth
+      : Math.max(0, rowWidth - gap - firstProducerWidth);
+
+    const availableForProducers = Math.max(
+      firstProducerWidth,
+      rowWidth - reservedTitleWidth - gap,
+    );
+
+    let visible = firstProducer;
+    let visibleWidth = firstProducerWidth;
+    let truncated = false;
+
+    for (let i = 1; i < producers.length; i++) {
+      const candidate = `${visible}, ${producers[i]}`;
+      const hasMore = i < producers.length - 1;
+
+      /*
+       * Если после этого продюсера ещё кто-то останется,
+       * сразу резервируем место под многоточие.
+       */
+      const rendered = hasMore ? `${candidate}…` : candidate;
+      const candidateWidth = measure(producer, rendered);
+
+      if (candidateWidth <= availableForProducers) {
+        visible = candidate;
+        visibleWidth = measure(producer, visible);
+      } else {
+        truncated = true;
+        break;
+      }
+    }
+
+    if (truncated) {
+      /*
+       * Многоточие должно помещаться вместе с последним
+       * полностью отображаемым именем.
+       */
+      while (
+        visible !== firstProducer &&
+        measure(producer, `${visible}…`) > availableForProducers
+      ) {
+        const parts = visible.split(", ");
+        parts.pop();
+        visible = parts.join(", ");
+      }
+
+      visible += "…";
+    }
+
+    const finalWidth = measure(producer, visible);
+
+    producer.textContent = visible;
+    producer.style.width = `${Math.ceil(finalWidth)}px`;
+    producer.style.flexBasis = `${Math.ceil(finalWidth)}px`;
+  }
+
+  const observer = new ResizeObserver(update);
+  observer.observe(node);
+
+  document.fonts?.ready.then(update);
+  update();
+
+  return {
+    update(nextProducers) {
+      producers = nextProducers;
+      update();
+    },
+
+    destroy() {
+      observer.disconnect();
+    },
+  };
+}
 </script>
 
 {#if loading}
@@ -81,17 +193,16 @@
       >
         <figure class="cover">
           {#if album.cover_art_url}
-            <img src={album.cover_art_url} width="240" height="240" alt="{album.name} cover" />
+            <img
+              src={album.cover_art_url}
+              width="240"
+              height="240"
+              alt="{album.name} cover"
+            />
           {/if}
         </figure>
 
-        <!-- Плеера пока нет — оставляем пустой блок под будущий функционал -->
         <div class="controls" aria-hidden="true"></div>
-
-        <!-- <div class="album-meta">
-          {#if album.song_pageviews}<span>{album.song_pageviews.toLocaleString("en-US")} plays</span>{/if}
-          <span>{album.tracks.length} tracks</span>
-        </div> -->
       </section>
 
       <section class="release-tracklist">
@@ -100,19 +211,33 @@
             <li class="track">
               <a href="/songs/{track.song_id}" use:link class="track-link">
                 <span class="track-num">{track.number ?? ""}</span>
+
                 {#if track.cover_thumbnail_url}
-                  <img src={track.cover_thumbnail_url} class="tracklist-cover" alt="{track.title} cover" />
+                  <img
+                    src={track.cover_thumbnail_url}
+                    class="tracklist-cover"
+                    alt="{track.title} cover"
+                  />
                 {:else}
                   <span class="tracklist-cover"></span>
                 {/if}
-                <span class="track-title">
-                  {track.title}{#if track.featuring.length > 0}<span class="track-feat"
+
+                <div
+                  class="track-content"
+                  use:fitTrackRow={track.producers}
+                >
+                  <span class="track-title">
+                    {track.title}{#if track.featuring.length > 0}<span class="track-feat"
                       >&nbsp;(feat. {track.featuring.join(", ")})</span
                     >{/if}
-                </span>
-                <div class="track-meta">
-                  <span class="track-producer">{truncateNameList(track.producers, PRODUCER_COLUMN_WIDTH)}</span>
-                  <span class="track-time"></span>
+                  </span>
+
+                  {#if track.producers.length > 0}
+                    <span
+                      class="track-producer"
+                      title={track.producers.join(", ")}
+                    ></span>
+                  {/if}
                 </div>
               </a>
             </li>
@@ -126,13 +251,15 @@
         <div class="release-header">
           <h2 class="release-title">
             {#if album.url}
-              <a href={album.url} target="_blank" rel="noreferrer">{album.name}</a>
+              <a href={album.url} target="_blank" rel="noreferrer">
+                {album.name}
+              </a>
             {:else}
               {album.name}
             {/if}
           </h2>
+
           <div class="album-ratings">
-            <!-- реального рейтинга пока нет — заглушка на будущее -->
             <span class="rating-badge">10</span>
           </div>
         </div>
@@ -140,8 +267,17 @@
         {#if album.artists.length > 0}
           <p class="release-artist-line">
             {#each album.artists as artist, i (artist.id)}
-              <a href="/artists/{artist.id}" use:link class="release-artist">{artist.name}</a
-              >{#if i < album.artists.length - 1}<span>,&nbsp;</span>{/if}
+              <a
+                href="/artists/{artist.id}"
+                use:link
+                class="release-artist"
+              >
+                {artist.name}
+              </a>
+
+              {#if i < album.artists.length - 1}
+                <span>,&nbsp;</span>
+              {/if}
             {/each}
           </p>
         {/if}
@@ -172,7 +308,6 @@
             <dd>{album.label.join(", ")}</dd>
           {/if}
 
-          <!-- Genres — всегда последними -->
           {#if album.genres.length > 0}
             <dt>Genre</dt>
             <dd class="genres">{album.genres.join(", ")}</dd>
@@ -181,35 +316,57 @@
 
         {#if album.album_art_primary_color || album.album_art_secondary_color}
           <div class="release-footer">
-  {#if album.album_art_primary_color}
-    <div class="color-swatch">
-      <span class="swatch-box" style="background: {album.album_art_primary_color}"></span>
-      <span class="swatch-hex">{album.album_art_primary_color}</span>
-    </div>
-  {/if}
-  {#if album.album_art_secondary_color}
-    <div class="color-swatch">
-      <span class="swatch-box" style="background: {album.album_art_secondary_color}"></span>
-      <span class="swatch-hex">{album.album_art_secondary_color}</span>
-    </div>
-  {/if}
-  <span class="release-id">#{album.id}</span>
-</div>
+            {#if album.album_art_primary_color}
+              <div class="color-swatch">
+                <span
+                  class="swatch-box"
+                  style="background: {album.album_art_primary_color}"
+                ></span>
+                <span class="swatch-hex">
+                  {album.album_art_primary_color}
+                </span>
+              </div>
+            {/if}
+
+            {#if album.album_art_secondary_color}
+              <div class="color-swatch">
+                <span
+                  class="swatch-box"
+                  style="background: {album.album_art_secondary_color}"
+                ></span>
+                <span class="swatch-hex">
+                  {album.album_art_secondary_color}
+                </span>
+              </div>
+            {/if}
+
+            <span class="release-id">#{album.id}</span>
+          </div>
         {/if}
       </article>
 
       {#if album.description_preview}
-        <article class="album-info" class:stretch={stretchBlock === "description"}>
+        <article
+          class="album-info"
+          class:stretch={stretchBlock === "description"}
+        >
           <h5>Description</h5>
+
           <div
             class="description"
             bind:this={descRef}
-            style="max-height: {descExpanded ? descFullHeight + 'px' : DESCRIPTION_COLLAPSED_HEIGHT + 'px'}"
+            style="max-height: {descExpanded
+              ? descFullHeight + 'px'
+              : DESCRIPTION_COLLAPSED_HEIGHT + 'px'}"
           >
             <p>{album.description_preview}</p>
           </div>
+
           {#if descNeedsToggle}
-            <button class="show-more-btn" onclick={() => (descExpanded = !descExpanded)}>
+            <button
+              class="show-more-btn"
+              onclick={() => (descExpanded = !descExpanded)}
+            >
               {descExpanded ? "Show less" : "Show more"}
             </button>
           {/if}
@@ -217,8 +374,12 @@
       {/if}
 
       {#if Object.keys(album.credits).length > 0}
-        <article class="album-info" class:stretch={stretchBlock === "credits"}>
+        <article
+          class="album-info"
+          class:stretch={stretchBlock === "credits"}
+        >
           <h5>Credits</h5>
+
           <dl class="release-meta">
             {#each sortedRoles(album.credits) as role (role)}
               <dt>{role}</dt>
@@ -231,11 +392,17 @@
       {#if album.cover_arts.length > 1}
         <article class="album-info">
           <h5>Cover arts</h5>
+
           <div class="physical-gallery">
             {#each album.cover_arts as cover (cover.image_url)}
               <div class="physical-item">
-                <img src={cover.thumbnail_image_url ?? cover.image_url} alt="{album.name} cover" />
-                <span class="format-label">{cover.label ?? "Cover"}</span>
+                <img
+                  src={cover.thumbnail_image_url ?? cover.image_url}
+                  alt="{album.name} cover"
+                />
+                <span class="format-label">
+                  {cover.label ?? "Cover"}
+                </span>
               </div>
             {/each}
           </div>
