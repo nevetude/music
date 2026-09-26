@@ -1,0 +1,593 @@
+diff --git a/frontend/package.json b/frontend/package.json
+index c5100d1..cdf3d81 100644
+--- a/frontend/package.json
++++ b/frontend/package.json
+@@ -10,8 +10,7 @@
+   },
+   "dependencies": {
+     "stopwords-en": "^0.3.0",
+-    "stopwords-ru": "^0.3.0",
+-    "svelte-spa-router": "^4.0.1"
++    "stopwords-ru": "^0.3.0"
+   },
+   "devDependencies": {
+     "@sveltejs/vite-plugin-svelte": "^4.0.0",
+diff --git a/frontend/src/App.svelte b/frontend/src/App.svelte
+index f93cc00..4e1305d 100644
+--- a/frontend/src/App.svelte
++++ b/frontend/src/App.svelte
+@@ -1,5 +1,5 @@
+ <script>
+-  import Router from "svelte-spa-router";
++  import Router from "./lib/Router.svelte";
+   import Header from "./lib/Header.svelte";
+   import Home from "./routes/Home.svelte";
+   import Artist from "./routes/Artist.svelte";
+diff --git a/frontend/src/lib/AlbumCard.svelte b/frontend/src/lib/AlbumCard.svelte
+index 9d7d18a..ecb1e96 100644
+--- a/frontend/src/lib/AlbumCard.svelte
++++ b/frontend/src/lib/AlbumCard.svelte
+@@ -1,5 +1,5 @@
+ <script>
+-  import { link } from "svelte-spa-router";
++  import { link } from "./router.js";
+ 
+   let { album } = $props();
+ 
+diff --git a/frontend/src/lib/ArtistCard.svelte b/frontend/src/lib/ArtistCard.svelte
+index 081307a..050bf16 100644
+--- a/frontend/src/lib/ArtistCard.svelte
++++ b/frontend/src/lib/ArtistCard.svelte
+@@ -1,5 +1,5 @@
+ <script>
+-  import { link } from "svelte-spa-router";
++  import { link } from "./router.js";
+ 
+   let { artist } = $props();
+ 
+diff --git a/frontend/src/lib/Router.svelte b/frontend/src/lib/Router.svelte
+new file mode 100644
+index 0000000..f3d1cb1
+--- /dev/null
++++ b/frontend/src/lib/Router.svelte
+@@ -0,0 +1,41 @@
++<script>
++  import { path } from "./router.js";
++
++  let { routes } = $props();
++
++  function compileRoute(pattern) {
++    const paramNames = [];
++    const regexStr = pattern.replace(/\/:([^/]+)/g, (_, name) => {
++      paramNames.push(name);
++      return "/([^/]+)";
++    });
++    return { regex: new RegExp(`^${regexStr}$`), paramNames };
++  }
++
++  let compiled = $derived(
++    Object.entries(routes).map(([pattern, component]) => ({
++      ...compileRoute(pattern),
++      component,
++    })),
++  );
++
++  let matched = $derived.by(() => {
++    const pathname = $path.split("?")[0];
++    for (const route of compiled) {
++      const found = pathname.match(route.regex);
++      if (found) {
++        const params = {};
++        route.paramNames.forEach((name, i) => (params[name] = found[i + 1]));
++        return { component: route.component, params };
++      }
++    }
++    return null;
++  });
++</script>
++
++{#if matched}
++  {@const Comp = matched.component}
++  <Comp params={matched.params} />
++{:else}
++  <p class="text-soft">Page not found.</p>
++{/if}
+diff --git a/frontend/src/lib/actions/fitTrackRow.js b/frontend/src/lib/actions/fitTrackRow.js
+new file mode 100644
+index 0000000..59882d3
+--- /dev/null
++++ b/frontend/src/lib/actions/fitTrackRow.js
+@@ -0,0 +1,109 @@
++/**
++ * Svelte action для строки трека в треклисте альбома.
++ *
++ * Приоритеты при нехватке ширины:
++ * 1. Первый продюсер показывается всегда целиком.
++ * 2. Если полное название трека помещается — сохраняем его целиком.
++ * 3. Всё оставшееся место отдаём дополнительным продюсерам.
++ * 4. Если название само слишком длинное — оно сокращается CSS-эллипсисом
++ *    (см. .track-title в app.css), но первый продюсер всё равно остаётся целиком.
++ *
++ * Требует реальный canvas.measureText(), поэтому чистым CSS не решается —
++ * ужимать список продюсеров по словам (а не по буквам) без замера текста нельзя.
++ *
++ * Использование: <div class="track-content" use:fitTrackRow={track.producers}>
++ * с дочерними .track-title и .track-producer внутри node.
++ */
++export function fitTrackRow(node, producers) {
++  const title = node.querySelector(".track-title");
++  const producer = node.querySelector(".track-producer");
++
++  if (!title || !producer || !producers?.length) return;
++
++  const canvas = document.createElement("canvas");
++  const ctx = canvas.getContext("2d");
++  const gap = 12;
++
++  function measure(element, text) {
++    ctx.font = getComputedStyle(element).font;
++    return ctx.measureText(text).width;
++  }
++
++  function update() {
++    const rowWidth = node.clientWidth;
++
++    const titleText = title.textContent.trim();
++    const titleWidth = measure(title, titleText);
++
++    const firstProducer = producers[0];
++    const firstProducerWidth = measure(producer, firstProducer);
++
++    const titleCanFit = titleWidth + gap + firstProducerWidth <= rowWidth;
++
++    const reservedTitleWidth = titleCanFit
++      ? titleWidth
++      : Math.max(0, rowWidth - gap - firstProducerWidth);
++
++    const availableForProducers = Math.max(
++      firstProducerWidth,
++      rowWidth - reservedTitleWidth - gap,
++    );
++
++    let visible = firstProducer;
++    let truncated = false;
++
++    for (let i = 1; i < producers.length; i++) {
++      const candidate = `${visible}, ${producers[i]}`;
++      const hasMore = i < producers.length - 1;
++
++      // Если после этого продюсера ещё кто-то останется,
++      // сразу резервируем место под многоточие.
++      const rendered = hasMore ? `${candidate}…` : candidate;
++      const candidateWidth = measure(producer, rendered);
++
++      if (candidateWidth <= availableForProducers) {
++        visible = candidate;
++      } else {
++        truncated = true;
++        break;
++      }
++    }
++
++    if (truncated) {
++      // Многоточие должно помещаться вместе с последним
++      // полностью отображаемым именем.
++      while (
++        visible !== firstProducer &&
++        measure(producer, `${visible}…`) > availableForProducers
++      ) {
++        const parts = visible.split(", ");
++        parts.pop();
++        visible = parts.join(", ");
++      }
++      visible += "…";
++    }
++
++    const finalWidth = measure(producer, visible);
++
++    producer.textContent = visible;
++    producer.style.width = `${Math.ceil(finalWidth)}px`;
++    producer.style.flexBasis = `${Math.ceil(finalWidth)}px`;
++  }
++
++  const observer = new ResizeObserver(update);
++  observer.observe(node);
++
++  document.fonts?.ready.then(update);
++  update();
++
++  return {
++    update(nextProducers) {
++      producers = nextProducers;
++      update();
++    },
++
++    destroy() {
++      observer.disconnect();
++    },
++  };
++}
+diff --git a/frontend/src/lib/router.js b/frontend/src/lib/router.js
+new file mode 100644
+index 0000000..7372d0e
+--- /dev/null
++++ b/frontend/src/lib/router.js
+@@ -0,0 +1,58 @@
++import { writable } from "svelte/store";
++
++/**
++ * Минимальный history-роутер без хэша. Заменяет svelte-spa-router:
++ * тот же принцип (store + action), но URL вида /albums/1, а не #/albums/1.
++ *
++ * Требование к хостингу: сервер должен отдавать index.html на любой путь
++ * (SPA-фолбэк) — Vite dev-сервер делает это из коробки, для прод-раздачи
++ * нужен try_files/_redirects на стороне статического хостинга.
++ */
++
++function currentPath() {
++  return window.location.pathname + window.location.search;
++}
++
++export const path = writable(currentPath());
++
++window.addEventListener("popstate", () => path.set(currentPath()));
++
++export function navigate(to) {
++  if (to !== currentPath()) {
++    history.pushState({}, "", to);
++    path.set(currentPath());
++  }
++}
++
++/**
++ * Action для <a href="...">: перехватывает обычный клик и делает
++ * pushState вместо перезагрузки документа. Ссылки с модификаторами
++ * (ctrl/cmd/shift/alt), среднюю кнопку мыши, target и внешние домены
++ * не трогает — браузер обрабатывает их сам.
++ */
++export function link(node) {
++  function onClick(event) {
++    if (
++      event.defaultPrevented ||
++      event.button !== 0 ||
++      event.metaKey ||
++      event.ctrlKey ||
++      event.shiftKey ||
++      event.altKey ||
++      node.hasAttribute("target") ||
++      node.hasAttribute("download") ||
++      node.origin !== window.location.origin
++    ) {
++      return;
++    }
++    event.preventDefault();
++    navigate(node.pathname + node.search);
++  }
++
++  node.addEventListener("click", onClick);
++  return {
++    destroy() {
++      node.removeEventListener("click", onClick);
++    },
++  };
++}
+diff --git a/frontend/src/lib/useApiResource.svelte.js b/frontend/src/lib/useApiResource.svelte.js
+new file mode 100644
+index 0000000..583530f
+--- /dev/null
++++ b/frontend/src/lib/useApiResource.svelte.js
+@@ -0,0 +1,54 @@
++/**
++ * Оборачивает асинхронный запрос (обычно один из методов api.js) в
++ * реактивный объект {data, loading, error} + метод load(...args).
++ *
++ * Раньше в каждом роуте повторялся один и тот же блок:
++ *   let data = $state(null);
++ *   let loading = $state(true);
++ *   let error = $state(null);
++ *   ...then/catch/finally...
++ * Теперь это в одном месте, плюс защита от гонки: если params поменялись
++ * до того как пришёл предыдущий ответ, устаревший результат тихо
++ * игнорируется (актуален для Artist/Album/Song — там params.id меняется
++ * при навигации между двумя страницами одного роута).
++ *
++ * Использование:
++ *   const artist = useApiResource(api.getArtist);
++ *   $effect(() => { artist.load(params.id); });
++ *   ...
++ *   {#if artist.loading} ... {:else if artist.error} ... {:else if artist.data} ...
++ */
++export function useApiResource(fetcher) {
++  let data = $state(null);
++  let loading = $state(true);
++  let error = $state(null);
++  let requestId = 0;
++
++  async function load(...args) {
++    const id = ++requestId;
++    loading = true;
++    error = null;
++
++    try {
++      const result = await fetcher(...args);
++      if (id === requestId) data = result;
++    } catch (e) {
++      if (id === requestId) error = e.message;
++    } finally {
++      if (id === requestId) loading = false;
++    }
++  }
++
++  return {
++    get data() {
++      return data;
++    },
++    get loading() {
++      return loading;
++    },
++    get error() {
++      return error;
++    },
++    load,
++  };
++}
+diff --git a/frontend/src/routes/Album.svelte b/frontend/src/routes/Album.svelte
+index 556ec99..af18054 100644
+--- a/frontend/src/routes/Album.svelte
++++ b/frontend/src/routes/Album.svelte
+@@ -1,13 +1,17 @@
+ <script>
+-  import { link } from "svelte-spa-router";
++  import { link } from "../lib/router.js";
+   import { api } from "../lib/api.js";
++  import { useApiResource } from "../lib/useApiResource.svelte.js";
+   import { formatReleaseDate } from "../lib/format.js";
++  import { fitTrackRow } from "../lib/actions/fitTrackRow.js";
+ 
+   let { params } = $props();
+ 
+-  let album = $state(null);
+-  let loading = $state(true);
+-  let error = $state(null);
++  const albumResource = useApiResource(api.getAlbum);
++
++  let album = $derived(albumResource.data);
++  let loading = $derived(albumResource.loading);
++  let error = $derived(albumResource.error);
+ 
+   const DESCRIPTION_COLLAPSED_HEIGHT = 70;
+ 
+@@ -36,14 +40,7 @@
+   );
+ 
+   $effect(() => {
+-    loading = true;
+-    error = null;
+-
+-    api
+-      .getAlbum(params.id)
+-      .then((data) => (album = data))
+-      .catch((e) => (error = e.message))
+-      .finally(() => (loading = false));
++    albumResource.load(params.id);
+   });
+ 
+   const roleOrder = [
+@@ -66,117 +63,6 @@
+     });
+   }
+ 
+-function fitTrackRow(node, producers) {
+-  const title = node.querySelector(".track-title");
+-  const producer = node.querySelector(".track-producer");
+-
+-  if (!title || !producer || !producers?.length) return;
+-
+-  const canvas = document.createElement("canvas");
+-  const ctx = canvas.getContext("2d");
+-  const gap = 12;
+-
+-  function measure(element, text) {
+-    ctx.font = getComputedStyle(element).font;
+-    return ctx.measureText(text).width;
+-  }
+-
+-  function update() {
+-    const rowWidth = node.clientWidth;
+-
+-    const titleText = title.textContent.trim();
+-    const titleWidth = measure(title, titleText);
+-
+-    const firstProducer = producers[0];
+-    const firstProducerWidth = measure(producer, firstProducer);
+-
+-    /*
+-     * Приоритеты:
+-     *
+-     * 1. Первый продюсер показывается всегда целиком.
+-     * 2. Если полное название трека помещается — сохраняем его целиком.
+-     * 3. Всё оставшееся место отдаём дополнительным продюсерам.
+-     * 4. Если название само слишком длинное — оно сокращается,
+-     *    но первый продюсер всё равно остаётся целиком.
+-     */
+-
+-    const titleCanFit =
+-      titleWidth + gap + firstProducerWidth <= rowWidth;
+-
+-    const reservedTitleWidth = titleCanFit
+-      ? titleWidth
+-      : Math.max(0, rowWidth - gap - firstProducerWidth);
+-
+-    const availableForProducers = Math.max(
+-      firstProducerWidth,
+-      rowWidth - reservedTitleWidth - gap,
+-    );
+-
+-    let visible = firstProducer;
+-    let visibleWidth = firstProducerWidth;
+-    let truncated = false;
+-
+-    for (let i = 1; i < producers.length; i++) {
+-      const candidate = `${visible}, ${producers[i]}`;
+-      const hasMore = i < producers.length - 1;
+-
+-      /*
+-       * Если после этого продюсера ещё кто-то останется,
+-       * сразу резервируем место под многоточие.
+-       */
+-      const rendered = hasMore ? `${candidate}…` : candidate;
+-      const candidateWidth = measure(producer, rendered);
+-
+-      if (candidateWidth <= availableForProducers) {
+-        visible = candidate;
+-        visibleWidth = measure(producer, visible);
+-      } else {
+-        truncated = true;
+-        break;
+-      }
+-    }
+-
+-    if (truncated) {
+-      /*
+-       * Многоточие должно помещаться вместе с последним
+-       * полностью отображаемым именем.
+-       */
+-      while (
+-        visible !== firstProducer &&
+-        measure(producer, `${visible}…`) > availableForProducers
+-      ) {
+-        const parts = visible.split(", ");
+-        parts.pop();
+-        visible = parts.join(", ");
+-      }
+-
+-      visible += "…";
+-    }
+-
+-    const finalWidth = measure(producer, visible);
+-
+-    producer.textContent = visible;
+-    producer.style.width = `${Math.ceil(finalWidth)}px`;
+-    producer.style.flexBasis = `${Math.ceil(finalWidth)}px`;
+-  }
+-
+-  const observer = new ResizeObserver(update);
+-  observer.observe(node);
+-
+-  document.fonts?.ready.then(update);
+-  update();
+-
+-  return {
+-    update(nextProducers) {
+-      producers = nextProducers;
+-      update();
+-    },
+-
+-    destroy() {
+-      observer.disconnect();
+-    },
+-  };
+-}
+ </script>
+ 
+ {#if loading}
+diff --git a/frontend/src/routes/Artist.svelte b/frontend/src/routes/Artist.svelte
+index 4692630..c05b8f6 100644
+--- a/frontend/src/routes/Artist.svelte
++++ b/frontend/src/routes/Artist.svelte
+@@ -1,22 +1,19 @@
+ <script>
+   import { api } from "../lib/api.js";
++  import { useApiResource } from "../lib/useApiResource.svelte.js";
+   import AlbumCard from "../lib/AlbumCard.svelte";
+ 
+   let { params } = $props();
+ 
+-  let artist = $state(null);
+-  let loading = $state(true);
+-  let error = $state(null);
++  const artistResource = useApiResource(api.getArtist);
+ 
+   $effect(() => {
+-    loading = true;
+-    error = null;
+-    api
+-      .getArtist(params.id)
+-      .then((data) => (artist = data))
+-      .catch((e) => (error = e.message))
+-      .finally(() => (loading = false));
++    artistResource.load(params.id);
+   });
++
++  let artist = $derived(artistResource.data);
++  let loading = $derived(artistResource.loading);
++  let error = $derived(artistResource.error);
+ </script>
+ 
+ {#if loading}
+diff --git a/frontend/src/routes/Home.svelte b/frontend/src/routes/Home.svelte
+index ab76383..64ffe0c 100644
+--- a/frontend/src/routes/Home.svelte
++++ b/frontend/src/routes/Home.svelte
+@@ -1,19 +1,17 @@
+ <script>
+   import { api } from "../lib/api.js";
++  import { useApiResource } from "../lib/useApiResource.svelte.js";
+   import ArtistCard from "../lib/ArtistCard.svelte";
+ 
+-  let artists = $state([]);
+-  let loading = $state(true);
+-  let error = $state(null);
++  const artistsResource = useApiResource(api.listArtists);
++  artistsResource.load();
+ 
+-  api
+-    .listArtists()
+-    .then((data) => (artists = data))
+-    .catch((e) => (error = e.message))
+-    .finally(() => (loading = false));
++  let loading = $derived(artistsResource.loading);
++  let error = $derived(artistsResource.error);
+ 
+   // Три группы, в порядке приоритета: полностью распарсенные -> у кого хотя бы
+   // есть альбомы -> все остальные (попали в базу только как соавторы/фиты).
++  let artists = $derived(artistsResource.data ?? []);
+   let fullArtists = $derived(artists.filter((a) => a.full));
+   let withAlbumsArtists = $derived(artists.filter((a) => !a.full && a.has_albums));
+   let otherArtists = $derived(artists.filter((a) => !a.full && !a.has_albums));
+diff --git a/frontend/src/routes/Song.svelte b/frontend/src/routes/Song.svelte
+index ce53395..18a6389 100644
+--- a/frontend/src/routes/Song.svelte
++++ b/frontend/src/routes/Song.svelte
+@@ -1,23 +1,20 @@
+ <script>
+-  import { link } from "svelte-spa-router";
++  import { link } from "../lib/router.js";
+   import { api } from "../lib/api.js";
++  import { useApiResource } from "../lib/useApiResource.svelte.js";
+   import { formatReleaseDate } from "../lib/format.js";
+ 
+   let { params } = $props();
+ 
+-  let song = $state(null);
+-  let loading = $state(true);
+-  let error = $state(null);
++  const songResource = useApiResource(api.getSong);
+ 
+   $effect(() => {
+-    loading = true;
+-    error = null;
+-    api
+-      .getSong(params.id)
+-      .then((data) => (song = data))
+-      .catch((e) => (error = e.message))
+-      .finally(() => (loading = false));
++    songResource.load(params.id);
+   });
++
++  let song = $derived(songResource.data);
++  let loading = $derived(songResource.loading);
++  let error = $derived(songResource.error);
+ </script>
+ 
+ {#if loading}

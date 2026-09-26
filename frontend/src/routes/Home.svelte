@@ -1,19 +1,17 @@
 <script>
   import { api } from "../lib/api.js";
+  import { useApiResource } from "../lib/useApiResource.svelte.js";
   import ArtistCard from "../lib/ArtistCard.svelte";
 
-  let artists = $state([]);
-  let loading = $state(true);
-  let error = $state(null);
+  const artistsResource = useApiResource(api.listArtists);
+  artistsResource.load();
 
-  api
-    .listArtists()
-    .then((data) => (artists = data))
-    .catch((e) => (error = e.message))
-    .finally(() => (loading = false));
+  let loading = $derived(artistsResource.loading);
+  let error = $derived(artistsResource.error);
 
   // Три группы, в порядке приоритета: полностью распарсенные -> у кого хотя бы
   // есть альбомы -> все остальные (попали в базу только как соавторы/фиты).
+  let artists = $derived(artistsResource.data ?? []);
   let fullArtists = $derived(artists.filter((a) => a.full));
   let withAlbumsArtists = $derived(artists.filter((a) => !a.full && a.has_albums));
   let otherArtists = $derived(artists.filter((a) => !a.full && !a.has_albums));

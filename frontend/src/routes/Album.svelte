@@ -1,13 +1,17 @@
 <script>
-  import { link } from "svelte-spa-router";
+  import { link } from "../lib/router.js";
   import { api } from "../lib/api.js";
+  import { useApiResource } from "../lib/useApiResource.svelte.js";
   import { formatReleaseDate } from "../lib/format.js";
+  import { fitTrackRow } from "../lib/actions/fitTrackRow.js";
 
   let { params } = $props();
 
-  let album = $state(null);
-  let loading = $state(true);
-  let error = $state(null);
+  const albumResource = useApiResource(api.getAlbum);
+
+  let album = $derived(albumResource.data);
+  let loading = $derived(albumResource.loading);
+  let error = $derived(albumResource.error);
 
   const DESCRIPTION_COLLAPSED_HEIGHT = 70;
 
@@ -36,14 +40,7 @@
   );
 
   $effect(() => {
-    loading = true;
-    error = null;
-
-    api
-      .getAlbum(params.id)
-      .then((data) => (album = data))
-      .catch((e) => (error = e.message))
-      .finally(() => (loading = false));
+    albumResource.load(params.id);
   });
 
   const roleOrder = [
@@ -66,117 +63,6 @@
     });
   }
 
-function fitTrackRow(node, producers) {
-  const title = node.querySelector(".track-title");
-  const producer = node.querySelector(".track-producer");
-
-  if (!title || !producer || !producers?.length) return;
-
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-  const gap = 12;
-
-  function measure(element, text) {
-    ctx.font = getComputedStyle(element).font;
-    return ctx.measureText(text).width;
-  }
-
-  function update() {
-    const rowWidth = node.clientWidth;
-
-    const titleText = title.textContent.trim();
-    const titleWidth = measure(title, titleText);
-
-    const firstProducer = producers[0];
-    const firstProducerWidth = measure(producer, firstProducer);
-
-    /*
-     * Приоритеты:
-     *
-     * 1. Первый продюсер показывается всегда целиком.
-     * 2. Если полное название трека помещается — сохраняем его целиком.
-     * 3. Всё оставшееся место отдаём дополнительным продюсерам.
-     * 4. Если название само слишком длинное — оно сокращается,
-     *    но первый продюсер всё равно остаётся целиком.
-     */
-
-    const titleCanFit =
-      titleWidth + gap + firstProducerWidth <= rowWidth;
-
-    const reservedTitleWidth = titleCanFit
-      ? titleWidth
-      : Math.max(0, rowWidth - gap - firstProducerWidth);
-
-    const availableForProducers = Math.max(
-      firstProducerWidth,
-      rowWidth - reservedTitleWidth - gap,
-    );
-
-    let visible = firstProducer;
-    let visibleWidth = firstProducerWidth;
-    let truncated = false;
-
-    for (let i = 1; i < producers.length; i++) {
-      const candidate = `${visible}, ${producers[i]}`;
-      const hasMore = i < producers.length - 1;
-
-      /*
-       * Если после этого продюсера ещё кто-то останется,
-       * сразу резервируем место под многоточие.
-       */
-      const rendered = hasMore ? `${candidate}…` : candidate;
-      const candidateWidth = measure(producer, rendered);
-
-      if (candidateWidth <= availableForProducers) {
-        visible = candidate;
-        visibleWidth = measure(producer, visible);
-      } else {
-        truncated = true;
-        break;
-      }
-    }
-
-    if (truncated) {
-      /*
-       * Многоточие должно помещаться вместе с последним
-       * полностью отображаемым именем.
-       */
-      while (
-        visible !== firstProducer &&
-        measure(producer, `${visible}…`) > availableForProducers
-      ) {
-        const parts = visible.split(", ");
-        parts.pop();
-        visible = parts.join(", ");
-      }
-
-      visible += "…";
-    }
-
-    const finalWidth = measure(producer, visible);
-
-    producer.textContent = visible;
-    producer.style.width = `${Math.ceil(finalWidth)}px`;
-    producer.style.flexBasis = `${Math.ceil(finalWidth)}px`;
-  }
-
-  const observer = new ResizeObserver(update);
-  observer.observe(node);
-
-  document.fonts?.ready.then(update);
-  update();
-
-  return {
-    update(nextProducers) {
-      producers = nextProducers;
-      update();
-    },
-
-    destroy() {
-      observer.disconnect();
-    },
-  };
-}
 </script>
 
 {#if loading}
@@ -209,7 +95,7 @@ function fitTrackRow(node, producers) {
         <ol role="list" class="tracklist">
           {#each album.tracks as track (track.song_id)}
             <li class="track">
-              <a href="/songs/{track.song_id}" use:link class="track-link">
+              <a href="/songs/{track.song_id}" use:link target="_blank" rel="noopener" class="track-link">
                 <span class="track-num">{track.number ?? ""}</span>
 
                 {#if track.cover_thumbnail_url}
@@ -270,6 +156,8 @@ function fitTrackRow(node, producers) {
               <a
                 href="/artists/{artist.id}"
                 use:link
+                target="_blank"
+                rel="noopener"
                 class="release-artist"
               >
                 {artist.name}

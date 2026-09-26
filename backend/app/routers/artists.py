@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException
 from ..deps import SessionDep
 from ..repository import albums as albums_repo
 from ..repository import artists as repo
-from ..schemas import AlbumListItem, ArtistBrief, ArtistDetail, ArtistListItem
+from ..schemas import AlbumListItem, ArtistBrief, ArtistDetail, ArtistListItem, TrackItem
 
 router = APIRouter(prefix="/api/artists", tags=["artists"])
 
@@ -35,4 +35,9 @@ def get_artist(artist_id: int, session: SessionDep):
         )
         for album in albums
     ]
-    return ArtistDetail(**artist.model_dump(), albums=album_items)
+    return ArtistDetail(
+        **artist.model_dump(),
+        alternate_names=repo.get_artist_alternate_names(session, artist_id),
+        top_tracks=[TrackItem(**t) for t in repo.get_artist_top_tracks(session, artist_id)],
+        albums=album_items,
+    )

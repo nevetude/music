@@ -1,5 +1,5 @@
 <script>
-  import Router from "svelte-spa-router";
+  import Router from "./lib/Router.svelte";
   import Header from "./lib/Header.svelte";
   import Home from "./routes/Home.svelte";
   import Artist from "./routes/Artist.svelte";

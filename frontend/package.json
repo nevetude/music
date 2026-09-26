@@ -10,8 +10,7 @@
   },
   "dependencies": {
     "stopwords-en": "^0.3.0",
-    "stopwords-ru": "^0.3.0",
-    "svelte-spa-router": "^4.0.1"
+    "stopwords-ru": "^0.3.0"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^4.0.0",

@@ -1,23 +1,20 @@
 <script>
-  import { link } from "svelte-spa-router";
+  import { link } from "../lib/router.js";
   import { api } from "../lib/api.js";
+  import { useApiResource } from "../lib/useApiResource.svelte.js";
   import { formatReleaseDate } from "../lib/format.js";
 
   let { params } = $props();
 
-  let song = $state(null);
-  let loading = $state(true);
-  let error = $state(null);
+  const songResource = useApiResource(api.getSong);
 
   $effect(() => {
-    loading = true;
-    error = null;
-    api
-      .getSong(params.id)
-      .then((data) => (song = data))
-      .catch((e) => (error = e.message))
-      .finally(() => (loading = false));
+    songResource.load(params.id);
   });
+
+  let song = $derived(songResource.data);
+  let loading = $derived(songResource.loading);
+  let error = $derived(songResource.error);
 </script>
 
 {#if loading}
@@ -51,7 +48,7 @@
         {#if song.artists.length > 0}
           <p class="release-artist-line">
             {#each song.artists as artist, i (artist.id)}
-              <a href="/artists/{artist.id}" use:link class="release-artist">{artist.name}</a
+              <a href="/artists/{artist.id}" use:link target="_blank" rel="noopener" class="release-artist">{artist.name}</a
               >{#if i < song.artists.length - 1}<span>,&nbsp;</span>{/if}
             {/each}
           </p>
@@ -117,7 +114,7 @@
           <h5>Appears on</h5>
           <p>
             {#each song.albums as a, i (a.id)}
-              <a href="/albums/{a.id}" use:link>{a.name}</a
+              <a href="/albums/{a.id}" use:link target="_blank" rel="noopener">{a.name}</a
               >{#if i < song.albums.length - 1}<span>,&nbsp;</span>{/if}
             {/each}
           </p>

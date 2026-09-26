@@ -68,11 +68,11 @@ def get_album_tracks(session: Session, album_id: int) -> list[dict]:
     rows = session.exec(statement).all()
 
     song_ids = [song.id for _, song in rows]
-    credits_by_song = _credits_by_song(session, song_ids)
+    credits_by_song_map = credits_by_song(session, song_ids)
 
     tracks = []
     for album_song, song in rows:
-        credits = credits_by_song.get(song.id, {})
+        credits = credits_by_song_map.get(song.id, {})
         tracks.append(
             {
                 "song_id": song.id,
@@ -90,7 +90,7 @@ def get_album_tracks(session: Session, album_id: int) -> list[dict]:
     return tracks
 
 
-def _credits_by_song(session: Session, song_ids: list[int]) -> dict[int, dict[str, list[str]]]:
+def credits_by_song(session: Session, song_ids: list[int]) -> dict[int, dict[str, list[str]]]:
     if not song_ids:
         return {}
     statement = (

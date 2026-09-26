@@ -659,18 +659,53 @@ abbr {
     color: var(--text-meta);
 }
 
-.artist-header {
+/* Артист: квадратный аватар меньше обложки альбома/трека + тот же
+   controls-блок, но подогнанный под ширину аватара. */
+.cover.cover-sm,
+.controls.controls-sm {
+    width: 160px;
+}
+
+.cover.cover-sm {
+    height: 160px;
+}
+
+.cover.cover-sm img {
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Заголовок секции дискографии (Albums / EPs / Singles / ...) + Collab-тумблер */
+.page-title-row {
     display: flex;
     align-items: center;
-    gap: 20px;
+    justify-content: space-between;
     margin-bottom: 16px;
 }
 
-.artist-header-avatar {
-    width: 96px;
-    height: 96px;
-    border-radius: 50%;
-    object-fit: cover;
+.page-title-row .page-title {
+    margin-bottom: 0;
+}
+
+.collab-toggle {
+    padding: 4px 12px;
+    border: 1px solid var(--bg-hover);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-meta);
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.collab-toggle:hover {
+    color: var(--title);
+    background: var(--bg-hover);
+}
+
+.collab-toggle.active {
+    color: #111;
+    background: #d8d8d8;
+    border-color: rgba(0, 0, 0, 0.15);
 }
 
 .lyrics-placeholder {

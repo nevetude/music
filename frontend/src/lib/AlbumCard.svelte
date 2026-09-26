@@ -1,5 +1,5 @@
 <script>
-  import { link } from "svelte-spa-router";
+  import { link } from "./router.js";
 
   let { album } = $props();
 
@@ -11,7 +11,7 @@
   }
 </script>
 
-<a href="/albums/{album.id}" use:link class="album-card">
+<a href="/albums/{album.id}" use:link target="_blank" rel="noopener" class="album-card">
   <div class="album-card-cover">
     {#if album.cover_art_url}
       <img src={album.cover_art_url} alt={album.name} loading="lazy" />

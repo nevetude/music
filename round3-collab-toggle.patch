@@ -1,0 +1,55 @@
+diff --git a/frontend/src/app.css b/frontend/src/app.css
+index 9fd680e..2f403eb 100644
+--- a/frontend/src/app.css
++++ b/frontend/src/app.css
+@@ -703,9 +703,9 @@ abbr {
+ }
+ 
+ .collab-toggle.active {
+-    color: #fff;
+-    background: var(--artist);
+-    border-color: var(--artist);
++    color: #111;
++    background: #d8d8d8;
++    border-color: rgba(0, 0, 0, 0.15);
+ }
+ 
+ .lyrics-placeholder {
+diff --git a/frontend/src/routes/Artist.svelte b/frontend/src/routes/Artist.svelte
+index fcb8230..cda5b07 100644
+--- a/frontend/src/routes/Artist.svelte
++++ b/frontend/src/routes/Artist.svelte
+@@ -51,6 +51,10 @@
+   function visibleAlbums(group) {
+     return collabFilters[group.key] ? group.albums.filter((a) => a.artists.length > 1) : group.albums;
+   }
++
++  function hasCollab(group) {
++    return group.albums.some((a) => a.artists.length > 1);
++  }
+ </script>
+ 
+ {#if loading}
+@@ -183,13 +187,15 @@
+       <section class="page-block">
+         <div class="page-title-row">
+           <h3 class="page-title">{group.title}</h3>
+-          <button
+-            class="collab-toggle"
+-            class:active={collabFilters[group.key]}
+-            onclick={() => toggleCollab(group.key)}
+-          >
+-            Collab
+-          </button>
++          {#if hasCollab(group)}
++            <button
++              class="collab-toggle"
++              class:active={collabFilters[group.key]}
++              onclick={() => toggleCollab(group.key)}
++            >
++              Collab
++            </button>
++          {/if}
+         </div>
+ 
+         {#if visibleAlbums(group).length === 0}

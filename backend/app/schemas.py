@@ -8,6 +8,7 @@ class ArtistListItem(BaseModel):
     name: str
     image_url: str | None = None
     followers_count: int | None = None
+    is_verified: bool | None = None
     full: bool = False
     has_albums: bool = False
 
@@ -17,6 +18,19 @@ class ArtistBrief(BaseModel):
 
     id: int
     name: str
+
+
+class TrackItem(BaseModel):
+    song_id: int
+    number: int | None = None
+    disc_number: int | None = None
+    title: str
+    url: str | None = None
+    cover_thumbnail_url: str | None = None
+    pageviews: int | None = None
+    instrumental: bool | None = None
+    producers: list[str] = []
+    featuring: list[str] = []
 
 
 class AlbumListItem(BaseModel):
@@ -34,20 +48,9 @@ class ArtistDetail(ArtistListItem):
     url: str | None = None
     header_image_url: str | None = None
     description_preview: str | None = None
+    alternate_names: list[str] = []
+    top_tracks: list[TrackItem] = []
     albums: list[AlbumListItem] = []
-
-
-class TrackItem(BaseModel):
-    song_id: int
-    number: int | None = None
-    disc_number: int | None = None
-    title: str
-    url: str | None = None
-    cover_thumbnail_url: str | None = None
-    pageviews: int | None = None
-    instrumental: bool | None = None
-    producers: list[str] = []
-    featuring: list[str] = []
 
 
 class CoverArtItem(BaseModel):

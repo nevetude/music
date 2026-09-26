@@ -1,0 +1,1168 @@
+diff --git a/backend/app/repository/albums.py b/backend/app/repository/albums.py
+index 826fddc..c18884f 100644
+--- a/backend/app/repository/albums.py
++++ b/backend/app/repository/albums.py
+@@ -68,11 +68,11 @@ def get_album_tracks(session: Session, album_id: int) -> list[dict]:
+     rows = session.exec(statement).all()
+ 
+     song_ids = [song.id for _, song in rows]
+-    credits_by_song = _credits_by_song(session, song_ids)
++    credits_by_song_map = credits_by_song(session, song_ids)
+ 
+     tracks = []
+     for album_song, song in rows:
+-        credits = credits_by_song.get(song.id, {})
++        credits = credits_by_song_map.get(song.id, {})
+         tracks.append(
+             {
+                 "song_id": song.id,
+@@ -90,7 +90,7 @@ def get_album_tracks(session: Session, album_id: int) -> list[dict]:
+     return tracks
+ 
+ 
+-def _credits_by_song(session: Session, song_ids: list[int]) -> dict[int, dict[str, list[str]]]:
++def credits_by_song(session: Session, song_ids: list[int]) -> dict[int, dict[str, list[str]]]:
+     if not song_ids:
+         return {}
+     statement = (
+diff --git a/backend/app/repository/artists.py b/backend/app/repository/artists.py
+index 55fa3b2..78c25e5 100644
+--- a/backend/app/repository/artists.py
++++ b/backend/app/repository/artists.py
+@@ -1,6 +1,7 @@
+ from sqlmodel import Session, select
+ 
+-from ..models import Album, AlbumArtist, Artist
++from ..models import Album, AlbumArtist, Artist, ArtistAlternateName, Song, SongArtist
++from . import albums as albums_repo
+ 
+ 
+ def list_artists(session: Session) -> list[Artist]:
+@@ -23,6 +24,46 @@ def get_artist(session: Session, artist_id: int) -> Artist | None:
+     return session.get(Artist, artist_id)
+ 
+ 
++def get_artist_alternate_names(session: Session, artist_id: int) -> list[str]:
++    statement = select(ArtistAlternateName.name).where(ArtistAlternateName.artist_id == artist_id)
++    return list(session.exec(statement).all())
++
++
++def get_artist_top_tracks(session: Session, artist_id: int, limit: int = 10) -> list[dict]:
++    """Топ-N треков артиста по pageviews среди его прямых primary_artists (SongArtist).
++    Заглушки (full=False) исключаем — у них может не быть ни обложки, ни pageviews,
++    ни нормального названия (см. flag full в models.py)."""
++    statement = (
++        select(Song)
++        .join(SongArtist, SongArtist.song_id == Song.id)
++        .where(SongArtist.artist_id == artist_id, Song.full == True)  # noqa: E712
++        .order_by(Song.pageviews.desc().nulls_last())
++        .limit(limit)
++    )
++    songs = list(session.exec(statement).all())
++
++    credits = albums_repo.credits_by_song(session, [song.id for song in songs])
++
++    tracks = []
++    for rank, song in enumerate(songs, start=1):
++        song_credits = credits.get(song.id, {})
++        tracks.append(
++            {
++                "song_id": song.id,
++                "number": rank,
++                "disc_number": None,
++                "title": song.title,
++                "url": song.url,
++                "cover_thumbnail_url": song.song_art_image_thumbnail_url,
++                "pageviews": song.pageviews,
++                "instrumental": song.instrumental,
++                "producers": song_credits.get("Producer", []),
++                "featuring": song_credits.get("Feature", []),
++            }
++        )
++    return tracks
++
++
+ def list_artist_albums(session: Session, artist_id: int) -> list[Album]:
+     statement = (
+         select(Album)
+diff --git a/backend/app/routers/artists.py b/backend/app/routers/artists.py
+index 32b2845..eeca3c3 100644
+--- a/backend/app/routers/artists.py
++++ b/backend/app/routers/artists.py
+@@ -3,7 +3,7 @@ from fastapi import APIRouter, HTTPException
+ from ..deps import SessionDep
+ from ..repository import albums as albums_repo
+ from ..repository import artists as repo
+-from ..schemas import AlbumListItem, ArtistBrief, ArtistDetail, ArtistListItem
++from ..schemas import AlbumListItem, ArtistBrief, ArtistDetail, ArtistListItem, TrackItem
+ 
+ router = APIRouter(prefix="/api/artists", tags=["artists"])
+ 
+@@ -35,4 +35,9 @@ def get_artist(artist_id: int, session: SessionDep):
+         )
+         for album in albums
+     ]
+-    return ArtistDetail(**artist.model_dump(), albums=album_items)
++    return ArtistDetail(
++        **artist.model_dump(),
++        alternate_names=repo.get_artist_alternate_names(session, artist_id),
++        top_tracks=[TrackItem(**t) for t in repo.get_artist_top_tracks(session, artist_id)],
++        albums=album_items,
++    )
+diff --git a/backend/app/schemas.py b/backend/app/schemas.py
+index 61cde76..0b4c0da 100644
+--- a/backend/app/schemas.py
++++ b/backend/app/schemas.py
+@@ -8,6 +8,7 @@ class ArtistListItem(BaseModel):
+     name: str
+     image_url: str | None = None
+     followers_count: int | None = None
++    is_verified: bool | None = None
+     full: bool = False
+     has_albums: bool = False
+ 
+@@ -19,6 +20,19 @@ class ArtistBrief(BaseModel):
+     name: str
+ 
+ 
++class TrackItem(BaseModel):
++    song_id: int
++    number: int | None = None
++    disc_number: int | None = None
++    title: str
++    url: str | None = None
++    cover_thumbnail_url: str | None = None
++    pageviews: int | None = None
++    instrumental: bool | None = None
++    producers: list[str] = []
++    featuring: list[str] = []
++
++
+ class AlbumListItem(BaseModel):
+     model_config = ConfigDict(from_attributes=True)
+ 
+@@ -34,22 +48,11 @@ class ArtistDetail(ArtistListItem):
+     url: str | None = None
+     header_image_url: str | None = None
+     description_preview: str | None = None
++    alternate_names: list[str] = []
++    top_tracks: list[TrackItem] = []
+     albums: list[AlbumListItem] = []
+ 
+ 
+-class TrackItem(BaseModel):
+-    song_id: int
+-    number: int | None = None
+-    disc_number: int | None = None
+-    title: str
+-    url: str | None = None
+-    cover_thumbnail_url: str | None = None
+-    pageviews: int | None = None
+-    instrumental: bool | None = None
+-    producers: list[str] = []
+-    featuring: list[str] = []
+-
+-
+ class CoverArtItem(BaseModel):
+     model_config = ConfigDict(from_attributes=True)
+ 
+diff --git a/frontend/package.json b/frontend/package.json
+index c5100d1..cdf3d81 100644
+--- a/frontend/package.json
++++ b/frontend/package.json
+@@ -10,8 +10,7 @@
+   },
+   "dependencies": {
+     "stopwords-en": "^0.3.0",
+-    "stopwords-ru": "^0.3.0",
+-    "svelte-spa-router": "^4.0.1"
++    "stopwords-ru": "^0.3.0"
+   },
+   "devDependencies": {
+     "@sveltejs/vite-plugin-svelte": "^4.0.0",
+diff --git a/frontend/src/App.svelte b/frontend/src/App.svelte
+index f93cc00..4e1305d 100644
+--- a/frontend/src/App.svelte
++++ b/frontend/src/App.svelte
+@@ -1,5 +1,5 @@
+ <script>
+-  import Router from "svelte-spa-router";
++  import Router from "./lib/Router.svelte";
+   import Header from "./lib/Header.svelte";
+   import Home from "./routes/Home.svelte";
+   import Artist from "./routes/Artist.svelte";
+diff --git a/frontend/src/app.css b/frontend/src/app.css
+index c649bb9..9fd680e 100644
+--- a/frontend/src/app.css
++++ b/frontend/src/app.css
+@@ -659,18 +659,53 @@ abbr {
+     color: var(--text-meta);
+ }
+ 
+-.artist-header {
++/* Артист: квадратный аватар меньше обложки альбома/трека + тот же
++   controls-блок, но подогнанный под ширину аватара. */
++.cover.cover-sm,
++.controls.controls-sm {
++    width: 160px;
++}
++
++.cover.cover-sm {
++    height: 160px;
++}
++
++.cover.cover-sm img {
++    height: 100%;
++    object-fit: cover;
++}
++
++/* Заголовок секции дискографии (Albums / EPs / Singles / ...) + Collab-тумблер */
++.page-title-row {
+     display: flex;
+     align-items: center;
+-    gap: 20px;
++    justify-content: space-between;
+     margin-bottom: 16px;
+ }
+ 
+-.artist-header-avatar {
+-    width: 96px;
+-    height: 96px;
+-    border-radius: 50%;
+-    object-fit: cover;
++.page-title-row .page-title {
++    margin-bottom: 0;
++}
++
++.collab-toggle {
++    padding: 4px 12px;
++    border: 1px solid var(--bg-hover);
++    border-radius: 999px;
++    background: transparent;
++    color: var(--text-meta);
++    font-size: 12px;
++    cursor: pointer;
++}
++
++.collab-toggle:hover {
++    color: var(--title);
++    background: var(--bg-hover);
++}
++
++.collab-toggle.active {
++    color: #fff;
++    background: var(--artist);
++    border-color: var(--artist);
+ }
+ 
+ .lyrics-placeholder {
+diff --git a/frontend/src/lib/AlbumCard.svelte b/frontend/src/lib/AlbumCard.svelte
+index 9d7d18a..41482b5 100644
+--- a/frontend/src/lib/AlbumCard.svelte
++++ b/frontend/src/lib/AlbumCard.svelte
+@@ -1,5 +1,5 @@
+ <script>
+-  import { link } from "svelte-spa-router";
++  import { link } from "./router.js";
+ 
+   let { album } = $props();
+ 
+@@ -11,7 +11,7 @@
+   }
+ </script>
+ 
+-<a href="/albums/{album.id}" use:link class="album-card">
++<a href="/albums/{album.id}" use:link target="_blank" rel="noopener" class="album-card">
+   <div class="album-card-cover">
+     {#if album.cover_art_url}
+       <img src={album.cover_art_url} alt={album.name} loading="lazy" />
+diff --git a/frontend/src/lib/ArtistCard.svelte b/frontend/src/lib/ArtistCard.svelte
+index 081307a..a0e0674 100644
+--- a/frontend/src/lib/ArtistCard.svelte
++++ b/frontend/src/lib/ArtistCard.svelte
+@@ -1,17 +1,11 @@
+ <script>
+-  import { link } from "svelte-spa-router";
++  import { link } from "./router.js";
++  import { formatFollowers } from "./format.js";
+ 
+   let { artist } = $props();
+-
+-  function formatFollowers(n) {
+-    if (!n) return null;
+-    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+-    if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+-    return String(n);
+-  }
+ </script>
+ 
+-<a href="/artists/{artist.id}" use:link class="artist-card">
++<a href="/artists/{artist.id}" use:link target="_blank" rel="noopener" class="artist-card">
+   <div class="artist-card-avatar">
+     {#if artist.image_url}
+       <img src={artist.image_url} alt={artist.name} loading="lazy" />
+diff --git a/frontend/src/lib/Router.svelte b/frontend/src/lib/Router.svelte
+new file mode 100644
+index 0000000..f3d1cb1
+--- /dev/null
++++ b/frontend/src/lib/Router.svelte
+@@ -0,0 +1,41 @@
++<script>
++  import { path } from "./router.js";
++
++  let { routes } = $props();
++
++  function compileRoute(pattern) {
++    const paramNames = [];
++    const regexStr = pattern.replace(/\/:([^/]+)/g, (_, name) => {
++      paramNames.push(name);
++      return "/([^/]+)";
++    });
++    return { regex: new RegExp(`^${regexStr}$`), paramNames };
++  }
++
++  let compiled = $derived(
++    Object.entries(routes).map(([pattern, component]) => ({
++      ...compileRoute(pattern),
++      component,
++    })),
++  );
++
++  let matched = $derived.by(() => {
++    const pathname = $path.split("?")[0];
++    for (const route of compiled) {
++      const found = pathname.match(route.regex);
++      if (found) {
++        const params = {};
++        route.paramNames.forEach((name, i) => (params[name] = found[i + 1]));
++        return { component: route.component, params };
++      }
++    }
++    return null;
++  });
++</script>
++
++{#if matched}
++  {@const Comp = matched.component}
++  <Comp params={matched.params} />
++{:else}
++  <p class="text-soft">Page not found.</p>
++{/if}
+diff --git a/frontend/src/lib/actions/fitTrackRow.js b/frontend/src/lib/actions/fitTrackRow.js
+new file mode 100644
+index 0000000..59882d3
+--- /dev/null
++++ b/frontend/src/lib/actions/fitTrackRow.js
+@@ -0,0 +1,109 @@
++/**
++ * Svelte action для строки трека в треклисте альбома.
++ *
++ * Приоритеты при нехватке ширины:
++ * 1. Первый продюсер показывается всегда целиком.
++ * 2. Если полное название трека помещается — сохраняем его целиком.
++ * 3. Всё оставшееся место отдаём дополнительным продюсерам.
++ * 4. Если название само слишком длинное — оно сокращается CSS-эллипсисом
++ *    (см. .track-title в app.css), но первый продюсер всё равно остаётся целиком.
++ *
++ * Требует реальный canvas.measureText(), поэтому чистым CSS не решается —
++ * ужимать список продюсеров по словам (а не по буквам) без замера текста нельзя.
++ *
++ * Использование: <div class="track-content" use:fitTrackRow={track.producers}>
++ * с дочерними .track-title и .track-producer внутри node.
++ */
++export function fitTrackRow(node, producers) {
++  const title = node.querySelector(".track-title");
++  const producer = node.querySelector(".track-producer");
++
++  if (!title || !producer || !producers?.length) return;
++
++  const canvas = document.createElement("canvas");
++  const ctx = canvas.getContext("2d");
++  const gap = 12;
++
++  function measure(element, text) {
++    ctx.font = getComputedStyle(element).font;
++    return ctx.measureText(text).width;
++  }
++
++  function update() {
++    const rowWidth = node.clientWidth;
++
++    const titleText = title.textContent.trim();
++    const titleWidth = measure(title, titleText);
++
++    const firstProducer = producers[0];
++    const firstProducerWidth = measure(producer, firstProducer);
++
++    const titleCanFit = titleWidth + gap + firstProducerWidth <= rowWidth;
++
++    const reservedTitleWidth = titleCanFit
++      ? titleWidth
++      : Math.max(0, rowWidth - gap - firstProducerWidth);
++
++    const availableForProducers = Math.max(
++      firstProducerWidth,
++      rowWidth - reservedTitleWidth - gap,
++    );
++
++    let visible = firstProducer;
++    let truncated = false;
++
++    for (let i = 1; i < producers.length; i++) {
++      const candidate = `${visible}, ${producers[i]}`;
++      const hasMore = i < producers.length - 1;
++
++      // Если после этого продюсера ещё кто-то останется,
++      // сразу резервируем место под многоточие.
++      const rendered = hasMore ? `${candidate}…` : candidate;
++      const candidateWidth = measure(producer, rendered);
++
++      if (candidateWidth <= availableForProducers) {
++        visible = candidate;
++      } else {
++        truncated = true;
++        break;
++      }
++    }
++
++    if (truncated) {
++      // Многоточие должно помещаться вместе с последним
++      // полностью отображаемым именем.
++      while (
++        visible !== firstProducer &&
++        measure(producer, `${visible}…`) > availableForProducers
++      ) {
++        const parts = visible.split(", ");
++        parts.pop();
++        visible = parts.join(", ");
++      }
++      visible += "…";
++    }
++
++    const finalWidth = measure(producer, visible);
++
++    producer.textContent = visible;
++    producer.style.width = `${Math.ceil(finalWidth)}px`;
++    producer.style.flexBasis = `${Math.ceil(finalWidth)}px`;
++  }
++
++  const observer = new ResizeObserver(update);
++  observer.observe(node);
++
++  document.fonts?.ready.then(update);
++  update();
++
++  return {
++    update(nextProducers) {
++      producers = nextProducers;
++      update();
++    },
++
++    destroy() {
++      observer.disconnect();
++    },
++  };
++}
+diff --git a/frontend/src/lib/format.js b/frontend/src/lib/format.js
+index 9bc1e39..b7819f8 100644
+--- a/frontend/src/lib/format.js
++++ b/frontend/src/lib/format.js
+@@ -33,6 +33,14 @@ function getMeasureContext(font) {
+  * никогда не показывает половину имени: либо оно целиком, либо его нет вообще.
+  * Требует реальный canvas.measureText(), поэтому чистым CSS не решается.
+  */
++/** Компактный формат числа подписчиков: 1234567 -> "1.2M", 3400 -> "3.4K". */
++export function formatFollowers(n) {
++  if (!n) return null;
++  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
++  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
++  return String(n);
++}
++
+ export function truncateNameList(names, maxWidthPx, font = "12px Roboto, system-ui, sans-serif") {
+   if (!names || names.length === 0) return "";
+   const ctx = getMeasureContext(font);
+@@ -44,3 +52,48 @@ export function truncateNameList(names, maxWidthPx, font = "12px Roboto, system-
+   }
+   return count > 0 ? render(count) : "…";
+ }
++
++// Genius отдаёт album_type строчными ("album", "ep", "single", "mixtape",
++// "compilation"...). Порядок задаёт последовательность секций на странице
++// артиста; всё, чего нет в списке (в т.ч. отсутствующий album_type),
++// уходит в "Other" и показывается последним.
++const ALBUM_TYPE_ORDER = ["album", "ep", "single", "mixtape", "compilation", "video"];
++
++const ALBUM_TYPE_LABELS = {
++  album: "Albums",
++  ep: "EPs",
++  single: "Singles",
++  mixtape: "Mixtapes",
++  compilation: "Compilations",
++  video: "Videos",
++};
++
++/** Название секции дискографии артиста для данного album_type. */
++export function albumTypeSectionTitle(albumType) {
++  if (!albumType) return "Other";
++  const key = albumType.toLowerCase();
++  if (ALBUM_TYPE_LABELS[key]) return ALBUM_TYPE_LABELS[key];
++  return `${key.charAt(0).toUpperCase()}${key.slice(1)}s`;
++}
++
++/** Группирует альбомы артиста по типу, сохраняя порядок ALBUM_TYPE_ORDER,
++ * с неизвестными типами в конце (в порядке появления). */
++export function groupAlbumsByType(albums) {
++  const groups = new Map();
++  for (const album of albums) {
++    const key = (album.album_type || "").toLowerCase() || "other";
++    if (!groups.has(key)) groups.set(key, []);
++    groups.get(key).push(album);
++  }
++
++  const orderedKeys = [
++    ...ALBUM_TYPE_ORDER.filter((key) => groups.has(key)),
++    ...[...groups.keys()].filter((key) => !ALBUM_TYPE_ORDER.includes(key)),
++  ];
++
++  return orderedKeys.map((key) => ({
++    key,
++    title: albumTypeSectionTitle(key === "other" ? null : key),
++    albums: groups.get(key),
++  }));
++}
+diff --git a/frontend/src/lib/router.js b/frontend/src/lib/router.js
+new file mode 100644
+index 0000000..7372d0e
+--- /dev/null
++++ b/frontend/src/lib/router.js
+@@ -0,0 +1,58 @@
++import { writable } from "svelte/store";
++
++/**
++ * Минимальный history-роутер без хэша. Заменяет svelte-spa-router:
++ * тот же принцип (store + action), но URL вида /albums/1, а не #/albums/1.
++ *
++ * Требование к хостингу: сервер должен отдавать index.html на любой путь
++ * (SPA-фолбэк) — Vite dev-сервер делает это из коробки, для прод-раздачи
++ * нужен try_files/_redirects на стороне статического хостинга.
++ */
++
++function currentPath() {
++  return window.location.pathname + window.location.search;
++}
++
++export const path = writable(currentPath());
++
++window.addEventListener("popstate", () => path.set(currentPath()));
++
++export function navigate(to) {
++  if (to !== currentPath()) {
++    history.pushState({}, "", to);
++    path.set(currentPath());
++  }
++}
++
++/**
++ * Action для <a href="...">: перехватывает обычный клик и делает
++ * pushState вместо перезагрузки документа. Ссылки с модификаторами
++ * (ctrl/cmd/shift/alt), среднюю кнопку мыши, target и внешние домены
++ * не трогает — браузер обрабатывает их сам.
++ */
++export function link(node) {
++  function onClick(event) {
++    if (
++      event.defaultPrevented ||
++      event.button !== 0 ||
++      event.metaKey ||
++      event.ctrlKey ||
++      event.shiftKey ||
++      event.altKey ||
++      node.hasAttribute("target") ||
++      node.hasAttribute("download") ||
++      node.origin !== window.location.origin
++    ) {
++      return;
++    }
++    event.preventDefault();
++    navigate(node.pathname + node.search);
++  }
++
++  node.addEventListener("click", onClick);
++  return {
++    destroy() {
++      node.removeEventListener("click", onClick);
++    },
++  };
++}
+diff --git a/frontend/src/lib/useApiResource.svelte.js b/frontend/src/lib/useApiResource.svelte.js
+new file mode 100644
+index 0000000..583530f
+--- /dev/null
++++ b/frontend/src/lib/useApiResource.svelte.js
+@@ -0,0 +1,54 @@
++/**
++ * Оборачивает асинхронный запрос (обычно один из методов api.js) в
++ * реактивный объект {data, loading, error} + метод load(...args).
++ *
++ * Раньше в каждом роуте повторялся один и тот же блок:
++ *   let data = $state(null);
++ *   let loading = $state(true);
++ *   let error = $state(null);
++ *   ...then/catch/finally...
++ * Теперь это в одном месте, плюс защита от гонки: если params поменялись
++ * до того как пришёл предыдущий ответ, устаревший результат тихо
++ * игнорируется (актуален для Artist/Album/Song — там params.id меняется
++ * при навигации между двумя страницами одного роута).
++ *
++ * Использование:
++ *   const artist = useApiResource(api.getArtist);
++ *   $effect(() => { artist.load(params.id); });
++ *   ...
++ *   {#if artist.loading} ... {:else if artist.error} ... {:else if artist.data} ...
++ */
++export function useApiResource(fetcher) {
++  let data = $state(null);
++  let loading = $state(true);
++  let error = $state(null);
++  let requestId = 0;
++
++  async function load(...args) {
++    const id = ++requestId;
++    loading = true;
++    error = null;
++
++    try {
++      const result = await fetcher(...args);
++      if (id === requestId) data = result;
++    } catch (e) {
++      if (id === requestId) error = e.message;
++    } finally {
++      if (id === requestId) loading = false;
++    }
++  }
++
++  return {
++    get data() {
++      return data;
++    },
++    get loading() {
++      return loading;
++    },
++    get error() {
++      return error;
++    },
++    load,
++  };
++}
+diff --git a/frontend/src/routes/Album.svelte b/frontend/src/routes/Album.svelte
+index 556ec99..ad5324f 100644
+--- a/frontend/src/routes/Album.svelte
++++ b/frontend/src/routes/Album.svelte
+@@ -1,13 +1,17 @@
+ <script>
+-  import { link } from "svelte-spa-router";
++  import { link } from "../lib/router.js";
+   import { api } from "../lib/api.js";
++  import { useApiResource } from "../lib/useApiResource.svelte.js";
+   import { formatReleaseDate } from "../lib/format.js";
++  import { fitTrackRow } from "../lib/actions/fitTrackRow.js";
+ 
+   let { params } = $props();
+ 
+-  let album = $state(null);
+-  let loading = $state(true);
+-  let error = $state(null);
++  const albumResource = useApiResource(api.getAlbum);
++
++  let album = $derived(albumResource.data);
++  let loading = $derived(albumResource.loading);
++  let error = $derived(albumResource.error);
+ 
+   const DESCRIPTION_COLLAPSED_HEIGHT = 70;
+ 
+@@ -36,14 +40,7 @@
+   );
+ 
+   $effect(() => {
+-    loading = true;
+-    error = null;
+-
+-    api
+-      .getAlbum(params.id)
+-      .then((data) => (album = data))
+-      .catch((e) => (error = e.message))
+-      .finally(() => (loading = false));
++    albumResource.load(params.id);
+   });
+ 
+   const roleOrder = [
+@@ -66,117 +63,6 @@
+     });
+   }
+ 
+-function fitTrackRow(node, producers) {
+-  const title = node.querySelector(".track-title");
+-  const producer = node.querySelector(".track-producer");
+-
+-  if (!title || !producer || !producers?.length) return;
+-
+-  const canvas = document.createElement("canvas");
+-  const ctx = canvas.getContext("2d");
+-  const gap = 12;
+-
+-  function measure(element, text) {
+-    ctx.font = getComputedStyle(element).font;
+-    return ctx.measureText(text).width;
+-  }
+-
+-  function update() {
+-    const rowWidth = node.clientWidth;
+-
+-    const titleText = title.textContent.trim();
+-    const titleWidth = measure(title, titleText);
+-
+-    const firstProducer = producers[0];
+-    const firstProducerWidth = measure(producer, firstProducer);
+-
+-    /*
+-     * Приоритеты:
+-     *
+-     * 1. Первый продюсер показывается всегда целиком.
+-     * 2. Если полное название трека помещается — сохраняем его целиком.
+-     * 3. Всё оставшееся место отдаём дополнительным продюсерам.
+-     * 4. Если название само слишком длинное — оно сокращается,
+-     *    но первый продюсер всё равно остаётся целиком.
+-     */
+-
+-    const titleCanFit =
+-      titleWidth + gap + firstProducerWidth <= rowWidth;
+-
+-    const reservedTitleWidth = titleCanFit
+-      ? titleWidth
+-      : Math.max(0, rowWidth - gap - firstProducerWidth);
+-
+-    const availableForProducers = Math.max(
+-      firstProducerWidth,
+-      rowWidth - reservedTitleWidth - gap,
+-    );
+-
+-    let visible = firstProducer;
+-    let visibleWidth = firstProducerWidth;
+-    let truncated = false;
+-
+-    for (let i = 1; i < producers.length; i++) {
+-      const candidate = `${visible}, ${producers[i]}`;
+-      const hasMore = i < producers.length - 1;
+-
+-      /*
+-       * Если после этого продюсера ещё кто-то останется,
+-       * сразу резервируем место под многоточие.
+-       */
+-      const rendered = hasMore ? `${candidate}…` : candidate;
+-      const candidateWidth = measure(producer, rendered);
+-
+-      if (candidateWidth <= availableForProducers) {
+-        visible = candidate;
+-        visibleWidth = measure(producer, visible);
+-      } else {
+-        truncated = true;
+-        break;
+-      }
+-    }
+-
+-    if (truncated) {
+-      /*
+-       * Многоточие должно помещаться вместе с последним
+-       * полностью отображаемым именем.
+-       */
+-      while (
+-        visible !== firstProducer &&
+-        measure(producer, `${visible}…`) > availableForProducers
+-      ) {
+-        const parts = visible.split(", ");
+-        parts.pop();
+-        visible = parts.join(", ");
+-      }
+-
+-      visible += "…";
+-    }
+-
+-    const finalWidth = measure(producer, visible);
+-
+-    producer.textContent = visible;
+-    producer.style.width = `${Math.ceil(finalWidth)}px`;
+-    producer.style.flexBasis = `${Math.ceil(finalWidth)}px`;
+-  }
+-
+-  const observer = new ResizeObserver(update);
+-  observer.observe(node);
+-
+-  document.fonts?.ready.then(update);
+-  update();
+-
+-  return {
+-    update(nextProducers) {
+-      producers = nextProducers;
+-      update();
+-    },
+-
+-    destroy() {
+-      observer.disconnect();
+-    },
+-  };
+-}
+ </script>
+ 
+ {#if loading}
+@@ -209,7 +95,7 @@ function fitTrackRow(node, producers) {
+         <ol role="list" class="tracklist">
+           {#each album.tracks as track (track.song_id)}
+             <li class="track">
+-              <a href="/songs/{track.song_id}" use:link class="track-link">
++              <a href="/songs/{track.song_id}" use:link target="_blank" rel="noopener" class="track-link">
+                 <span class="track-num">{track.number ?? ""}</span>
+ 
+                 {#if track.cover_thumbnail_url}
+@@ -270,6 +156,8 @@ function fitTrackRow(node, producers) {
+               <a
+                 href="/artists/{artist.id}"
+                 use:link
++                target="_blank"
++                rel="noopener"
+                 class="release-artist"
+               >
+                 {artist.name}
+diff --git a/frontend/src/routes/Artist.svelte b/frontend/src/routes/Artist.svelte
+index 4692630..fcb8230 100644
+--- a/frontend/src/routes/Artist.svelte
++++ b/frontend/src/routes/Artist.svelte
+@@ -1,22 +1,56 @@
+ <script>
++  import { link } from "../lib/router.js";
+   import { api } from "../lib/api.js";
++  import { useApiResource } from "../lib/useApiResource.svelte.js";
++  import { groupAlbumsByType, formatFollowers } from "../lib/format.js";
++  import { fitTrackRow } from "../lib/actions/fitTrackRow.js";
+   import AlbumCard from "../lib/AlbumCard.svelte";
+ 
+   let { params } = $props();
+ 
+-  let artist = $state(null);
+-  let loading = $state(true);
+-  let error = $state(null);
++  const artistResource = useApiResource(api.getArtist);
+ 
+   $effect(() => {
+-    loading = true;
+-    error = null;
+-    api
+-      .getArtist(params.id)
+-      .then((data) => (artist = data))
+-      .catch((e) => (error = e.message))
+-      .finally(() => (loading = false));
++    artistResource.load(params.id);
+   });
++
++  let artist = $derived(artistResource.data);
++  let loading = $derived(artistResource.loading);
++  let error = $derived(artistResource.error);
++
++  const DESCRIPTION_COLLAPSED_HEIGHT = 70;
++
++  let descRef = $state(null);
++  let descFullHeight = $state(0);
++  let descExpanded = $state(false);
++  let descNeedsToggle = $derived(descFullHeight > DESCRIPTION_COLLAPSED_HEIGHT + 4);
++
++  $effect(() => {
++    void artist?.description_preview;
++    void descRef;
++
++    descExpanded = false;
++
++    queueMicrotask(() => {
++      if (descRef) descFullHeight = descRef.scrollHeight;
++    });
++  });
++
++  let stretchBlock = $derived(artist?.description_preview ? "description" : null);
++
++  // Секции дискографии по типу альбома (Albums / EPs / Singles / ...). "Collab" —
++  // фильтр внутри конкретной секции: показывает только альбомы, где у артиста
++  // есть соавторы (artists.length > 1). Ключ секции -> boolean.
++  let albumGroups = $derived(artist ? groupAlbumsByType(artist.albums) : []);
++  let collabFilters = $state({});
++
++  function toggleCollab(key) {
++    collabFilters[key] = !collabFilters[key];
++  }
++
++  function visibleAlbums(group) {
++    return collabFilters[group.key] ? group.albums.filter((a) => a.artists.length > 1) : group.albums;
++  }
+ </script>
+ 
+ {#if loading}
+@@ -24,34 +58,150 @@
+ {:else if error}
+   <p class="text-soft">Failed to load artist: {error}</p>
+ {:else if artist}
+-  <section class="page-block">
+-    <div class="artist-header">
+-      {#if artist.image_url}
+-        <img class="artist-header-avatar" src={artist.image_url} alt={artist.name} />
+-      {/if}
+-      <div>
+-        <h2 class="release-title">{artist.name}</h2>
+-        {#if artist.followers_count}
+-          <p class="text-soft">{artist.followers_count.toLocaleString("en-US")} followers</p>
+-        {/if}
+-      </div>
+-    </div>
++  <div class="release-layout">
++    <aside class="release-aside">
++      <section class="release-summary">
++        <figure class="cover cover-sm">
++          {#if artist.image_url}
++            <img src={artist.image_url} width="160" height="160" alt={artist.name} />
++          {/if}
++        </figure>
++
++        <div class="controls controls-sm" aria-hidden="true"></div>
++      </section>
+ 
+-    {#if artist.description_preview}
+-      <p class="description">{artist.description_preview}</p>
+-    {/if}
+-  </section>
++      <section class="release-tracklist">
++        <ol role="list" class="tracklist">
++          {#each artist.top_tracks as track (track.song_id)}
++            <li class="track">
++              <a href="/songs/{track.song_id}" use:link target="_blank" rel="noopener" class="track-link">
++                <span class="track-num">{track.number ?? ""}</span>
+ 
+-  <section class="page-block">
+-    <h3 class="page-title">Albums</h3>
+-    {#if artist.albums.length === 0}
++                {#if track.cover_thumbnail_url}
++                  <img
++                    src={track.cover_thumbnail_url}
++                    class="tracklist-cover"
++                    alt="{track.title} cover"
++                  />
++                {:else}
++                  <span class="tracklist-cover"></span>
++                {/if}
++
++                <div class="track-content" use:fitTrackRow={track.producers}>
++                  <span class="track-title">
++                    {track.title}{#if track.featuring.length > 0}<span class="track-feat"
++                      >&nbsp;(feat. {track.featuring.join(", ")})</span
++                    >{/if}
++                  </span>
++
++                  {#if track.producers.length > 0}
++                    <span class="track-producer" title={track.producers.join(", ")}></span>
++                  {/if}
++                </div>
++              </a>
++            </li>
++          {:else}
++            <li class="text-soft" style="padding: 10px 8px;">No tracks yet.</li>
++          {/each}
++        </ol>
++      </section>
++    </aside>
++
++    <section class="release-details">
++      <article class="main-info">
++        <div class="release-header">
++          <h2 class="release-title">
++            {#if artist.url}
++              <a href={artist.url} target="_blank" rel="noreferrer">
++                {artist.name}
++              </a>
++            {:else}
++              {artist.name}
++            {/if}
++          </h2>
++
++          {#if artist.is_verified}
++            <div class="album-ratings">
++              <span class="rating-badge">✓ Verified</span>
++            </div>
++          {/if}
++        </div>
++
++        <dl class="release-meta">
++          {#if formatFollowers(artist.followers_count)}
++            <dt>Followers</dt>
++            <dd>{formatFollowers(artist.followers_count)}</dd>
++          {/if}
++
++          {#if artist.is_verified !== null && artist.is_verified !== undefined}
++            <dt>Verified</dt>
++            <dd>{artist.is_verified ? "Yes" : "No"}</dd>
++          {/if}
++
++          {#if artist.alternate_names.length > 0}
++            <dt>Also known as</dt>
++            <dd>{artist.alternate_names.join(", ")}</dd>
++          {/if}
++        </dl>
++
++        <div class="release-footer">
++          <span class="release-id">#{artist.id}</span>
++        </div>
++      </article>
++
++      {#if artist.description_preview}
++        <article class="album-info" class:stretch={stretchBlock === "description"}>
++          <h5>Description</h5>
++
++          <div
++            class="description"
++            bind:this={descRef}
++            style="max-height: {descExpanded
++              ? descFullHeight + 'px'
++              : DESCRIPTION_COLLAPSED_HEIGHT + 'px'}"
++          >
++            <p>{artist.description_preview}</p>
++          </div>
++
++          {#if descNeedsToggle}
++            <button class="show-more-btn" onclick={() => (descExpanded = !descExpanded)}>
++              {descExpanded ? "Show less" : "Show more"}
++            </button>
++          {/if}
++        </article>
++      {/if}
++    </section>
++  </div>
++
++  {#if albumGroups.length === 0}
++    <section class="page-block">
++      <h3 class="page-title">Albums</h3>
+       <p class="text-soft">No albums yet.</p>
+-    {:else}
+-      <div class="album-grid">
+-        {#each artist.albums as album (album.id)}
+-          <AlbumCard {album} />
+-        {/each}
+-      </div>
+-    {/if}
+-  </section>
++    </section>
++  {:else}
++    {#each albumGroups as group (group.key)}
++      <section class="page-block">
++        <div class="page-title-row">
++          <h3 class="page-title">{group.title}</h3>
++          <button
++            class="collab-toggle"
++            class:active={collabFilters[group.key]}
++            onclick={() => toggleCollab(group.key)}
++          >
++            Collab
++          </button>
++        </div>
++
++        {#if visibleAlbums(group).length === 0}
++          <p class="text-soft">No collaborative albums.</p>
++        {:else}
++          <div class="album-grid">
++            {#each visibleAlbums(group) as album (album.id)}
++              <AlbumCard {album} />
++            {/each}
++          </div>
++        {/if}
++      </section>
++    {/each}
++  {/if}
+ {/if}
+diff --git a/frontend/src/routes/Home.svelte b/frontend/src/routes/Home.svelte
+index ab76383..64ffe0c 100644
+--- a/frontend/src/routes/Home.svelte
++++ b/frontend/src/routes/Home.svelte
+@@ -1,19 +1,17 @@
+ <script>
+   import { api } from "../lib/api.js";
++  import { useApiResource } from "../lib/useApiResource.svelte.js";
+   import ArtistCard from "../lib/ArtistCard.svelte";
+ 
+-  let artists = $state([]);
+-  let loading = $state(true);
+-  let error = $state(null);
++  const artistsResource = useApiResource(api.listArtists);
++  artistsResource.load();
+ 
+-  api
+-    .listArtists()
+-    .then((data) => (artists = data))
+-    .catch((e) => (error = e.message))
+-    .finally(() => (loading = false));
++  let loading = $derived(artistsResource.loading);
++  let error = $derived(artistsResource.error);
+ 
+   // Три группы, в порядке приоритета: полностью распарсенные -> у кого хотя бы
+   // есть альбомы -> все остальные (попали в базу только как соавторы/фиты).
++  let artists = $derived(artistsResource.data ?? []);
+   let fullArtists = $derived(artists.filter((a) => a.full));
+   let withAlbumsArtists = $derived(artists.filter((a) => !a.full && a.has_albums));
+   let otherArtists = $derived(artists.filter((a) => !a.full && !a.has_albums));
+diff --git a/frontend/src/routes/Song.svelte b/frontend/src/routes/Song.svelte
+index ce53395..c759f0c 100644
+--- a/frontend/src/routes/Song.svelte
++++ b/frontend/src/routes/Song.svelte
+@@ -1,23 +1,20 @@
+ <script>
+-  import { link } from "svelte-spa-router";
++  import { link } from "../lib/router.js";
+   import { api } from "../lib/api.js";
++  import { useApiResource } from "../lib/useApiResource.svelte.js";
+   import { formatReleaseDate } from "../lib/format.js";
+ 
+   let { params } = $props();
+ 
+-  let song = $state(null);
+-  let loading = $state(true);
+-  let error = $state(null);
++  const songResource = useApiResource(api.getSong);
+ 
+   $effect(() => {
+-    loading = true;
+-    error = null;
+-    api
+-      .getSong(params.id)
+-      .then((data) => (song = data))
+-      .catch((e) => (error = e.message))
+-      .finally(() => (loading = false));
++    songResource.load(params.id);
+   });
++
++  let song = $derived(songResource.data);
++  let loading = $derived(songResource.loading);
++  let error = $derived(songResource.error);
+ </script>
+ 
+ {#if loading}
+@@ -51,7 +48,7 @@
+         {#if song.artists.length > 0}
+           <p class="release-artist-line">
+             {#each song.artists as artist, i (artist.id)}
+-              <a href="/artists/{artist.id}" use:link class="release-artist">{artist.name}</a
++              <a href="/artists/{artist.id}" use:link target="_blank" rel="noopener" class="release-artist">{artist.name}</a
+               >{#if i < song.artists.length - 1}<span>,&nbsp;</span>{/if}
+             {/each}
+           </p>
+@@ -117,7 +114,7 @@
+           <h5>Appears on</h5>
+           <p>
+             {#each song.albums as a, i (a.id)}
+-              <a href="/albums/{a.id}" use:link>{a.name}</a
++              <a href="/albums/{a.id}" use:link target="_blank" rel="noopener">{a.name}</a
+               >{#if i < song.albums.length - 1}<span>,&nbsp;</span>{/if}
+             {/each}
+           </p>
