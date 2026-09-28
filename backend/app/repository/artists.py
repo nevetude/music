@@ -9,12 +9,10 @@ def list_artists(session: Session) -> list[Artist]:
 
 
 def artist_ids_with_albums(session: Session) -> set[int]:
-    """id артистов, у которых есть хотя бы один полноценный (full=True) альбом —
-    то есть который реально покажется у них на карточке. Для группировки на главной."""
+    """id артистов, у которых есть хотя бы один альбом. Для группировки на главной."""
     statement = (
         select(AlbumArtist.artist_id)
         .join(Album, Album.id == AlbumArtist.album_id)
-        .where(Album.full == True)  # noqa: E712
         .distinct()
     )
     return set(session.exec(statement).all())
@@ -68,7 +66,7 @@ def list_artist_albums(session: Session, artist_id: int) -> list[Album]:
     statement = (
         select(Album)
         .join(AlbumArtist, AlbumArtist.album_id == Album.id)
-        .where(AlbumArtist.artist_id == artist_id, Album.full == True)  # noqa: E712
+        .where(AlbumArtist.artist_id == artist_id)
         .order_by(Album.release_date.desc())
     )
     return list(session.exec(statement).all())

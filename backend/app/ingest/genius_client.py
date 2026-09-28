@@ -9,8 +9,11 @@
 """
 
 import asyncio
+import logging
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; GeniusParser/1.0)"}
 
@@ -78,7 +81,7 @@ async def fetch_songs_with_client(client: httpx.AsyncClient, song_ids: list[int]
     songs = []
     for song_id, result in zip(song_ids, results, strict=True):
         if isinstance(result, Exception):
-            print(f"      ✗ песня {song_id}: ошибка — {result}")
+            logger.error("song %s: failed — %s", song_id, result)
             continue
         songs.append(result)
     return songs

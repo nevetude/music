@@ -2,6 +2,8 @@
 но upsert/link-паттерны вынесены в helpers.py — вместо восьми почти
 одинаковых блоков "get -> add или setattr" здесь только сами данные."""
 
+import logging
+
 from sqlmodel import Session
 
 from ..database import new_session
@@ -23,6 +25,8 @@ from ..models import (
 )
 from .helpers import get_or_create, link, upsert
 
+logger = logging.getLogger(__name__)
+
 # Поля-массивы артистов, которые НЕ входят в custom_performances,
 # но должны попасть в credits с соответствующей ролью.
 ROLE_FIELDS = {
@@ -37,16 +41,19 @@ ROLE_FIELDS = {
 
 
 def upsert_artist(session: Session, data: dict, *, full: bool = False) -> None:
-    """full=True — ТОЛЬКО когда карточка пришла из явного парсинга артиста
-    (make parse artist <id> либо корневой артист в make parse <id>, см. save_artist).
-    Во всех остальных местах (артист как соавтор/фит/продюсер чужой сущности)
-    full остаётся False по умолчанию, даже если пришедших полей достаточно много.
-    Уже полную карточку неполными данными не перезаписываем — та же защита, что у Song/Album."""
-    existing = session.get(Artist, data["id"])
-    if existing is not None and existing.full and not full:
-        return
+    """Сохраняет всё, что пришло про артиста, — независимо от источника.
 
+    full — отдельный флаг "у этого артиста спарсена вся дискография" (True только
+    из save_artist, т.е. make parse artist/<id>). Он не про полноту данных карточки:
+    артист, найденный как соавтор/фит/продюсер, тоже пишется целиком, просто с full=False.
+    Флаг "липкий": повторное появление артиста как соавтора его не сбрасывает.
+
+    Урезанная версия артиста не затирает уже сохранённые поля (skip_none), поэтому
+    защита "если full — пропустить" больше не нужна.
+
+    Логи сохранения артиста — только DEBUG, чтобы не шуметь поверх album/track логов."""
     name_components = data.get("name_components") or {}
+    alternate_names = data.get("alternate_names") or []
     fields = dict(
         name=data.get("name"),
         slug=data.get("slug"),
@@ -58,14 +65,17 @@ def upsert_artist(session: Session, data: dict, *, full: bool = False) -> None:
         followers_count=data.get("followers_count"),
         base_name=name_components.get("base_name"),
         disambiguator=name_components.get("disambiguator"),
-        description=data.get("description"),
+        # По умолчанию real_name = первое альтернативное имя из списка.
+        real_name=alternate_names[0] if alternate_names else None,
         description_preview=data.get("description_preview"),
         translation_artist=data.get("translation_artist"),
-        full=full,
     )
-    upsert(session, Artist, {"id": data["id"]}, fields)
+    if full:
+        fields["full"] = True  # в остальных случаях не трогаем (новая строка = False)
+    upsert(session, Artist, {"id": data["id"]}, fields, skip_none=True)
+    logger.debug("artist %s (%r) upserted: full=%s", data["id"], data.get("name"), full)
 
-    for alt_name in data.get("alternate_names", []) or []:
+    for alt_name in alternate_names:
         link(session, ArtistAlternateName, artist_id=data["id"], name=alt_name)
 
 
@@ -111,12 +121,9 @@ def upsert_song(session: Session, data: dict, *, full: bool) -> None:
     upsert(session, Song, {"id": data["id"]}, fields)
 
 
-def upsert_album(session: Session, data: dict, *, full: bool) -> None:
-    """full=False — альбом пришёл только из album_relationships/тела песни (неполные данные)."""
-    existing = session.get(Album, data["id"])
-    if existing is not None and existing.full and not full:
-        return  # уже есть полноценная запись — заглушкой не портим
-
+def upsert_album(session: Session, data: dict) -> None:
+    """Флага full у альбомов нет: любой альбом пишется тем, что пришло, а урезанная
+    версия (вложенная в песню/relationships) не затирает уже сохранённые поля (skip_none)."""
     fields = dict(
         name=data.get("name"),
         full_title=data.get("full_title"),
@@ -134,9 +141,8 @@ def upsert_album(session: Session, data: dict, *, full: bool) -> None:
         album_art_text_color=data.get("album_art_text_color"),
         song_pageviews=data.get("song_pageviews"),
         updated_at=data.get("updated_at"),
-        full=full,
     )
-    upsert(session, Album, {"id": data["id"]}, fields)
+    upsert(session, Album, {"id": data["id"]}, fields, skip_none=True)
 
 
 def upsert_tags(session: Session, song_id: int, tags: list[dict]) -> None:
@@ -250,8 +256,7 @@ def add_album_relationships(
     for rel in album_relationships:
         rel_type = rel.get("relationship_type")
         for related_album in rel.get("albums", []):
-            # связанный альбом мог быть не спаршен полностью — сохраняем как заглушку
-            upsert_album(session, related_album, full=False)
+            upsert_album(session, related_album)
             link_album_artists(
                 session, related_album["id"], related_album.get("primary_artists", [])
             )
@@ -277,10 +282,9 @@ def ingest_song(session: Session, song: dict) -> None:
     add_relationships(session, song["id"], song.get("song_relationships", []))
 
     for album in song.get("albums", []):
-        # ВАЖНО: album здесь — урезанная версия из тела песни (не /api/albums/{id}),
-        # поэтому full=False — иначе она затирает уже сохранённый полный альбом
-        # почти пустыми полями (баг, который был здесь раньше).
-        upsert_album(session, album, full=False)
+        # album здесь — урезанная версия из тела песни; skip_none в upsert_album
+        # не даёт ей затереть уже сохранённый полный альбом пустыми полями.
+        upsert_album(session, album)
         link_album_artists(session, album["id"], album.get("primary_artists", []))
         link_album_song(session, album["id"], song["id"])
 
@@ -294,7 +298,7 @@ def save_songs(songs: list[dict]) -> None:
 
 def ingest_album(session: Session, album: dict) -> None:
     """Полная загрузка одного объекта album (как из /api/albums/{id}) в БД."""
-    upsert_album(session, album, full=True)
+    upsert_album(session, album)
     link_album_artists(session, album["id"], album.get("primary_artists", []))
     add_album_performances(session, album["id"], album.get("song_performances", []))
     add_album_relationships(session, album["id"], album.get("album_relationships", []))
@@ -333,7 +337,8 @@ def save_album_tracks(album_id: int, tracks: list[dict]) -> None:
 
 def save_artist(artist: dict) -> None:
     """Вызывается только из parse_artist/parse_full — то есть только когда это
-    ЯВНЫЙ парсинг именно этого артиста, поэтому full=True всегда обоснован."""
+    ЯВНЫЙ парсинг именно этого артиста, поэтому full=True (дискография спарсена)
+    всегда обоснован."""
     with new_session() as session:
         upsert_artist(session, artist, full=True)
         session.commit()

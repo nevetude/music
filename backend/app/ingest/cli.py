@@ -7,11 +7,15 @@ make parse album 125    -> альбом + треклист + все его пе�
 
 import argparse
 import asyncio
+import logging
 import sys
 from collections.abc import Coroutine
 from typing import Any
 
 from . import commands
+from .log_format import setup_logging
+
+logger = logging.getLogger(__name__)
 
 MODES: dict[str, Any] = {
     "artist": commands.parse_artist,
@@ -34,6 +38,7 @@ def build_coroutine(mode_or_id: str, entity_id: int | None) -> Coroutine:
 
 
 def main() -> None:
+    setup_logging()
     parser = argparse.ArgumentParser(description="Загрузка данных Genius в БД")
     parser.add_argument(
         "mode_or_id", help="id артиста (полный парсинг) или режим artist/song/album"
@@ -52,7 +57,7 @@ def main() -> None:
     try:
         asyncio.run(coro)
     except KeyboardInterrupt:
-        print("\nПрервано пользователем")
+        logger.warning("interrupted")
         sys.exit(1)
 
 

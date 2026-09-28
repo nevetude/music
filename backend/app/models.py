@@ -19,13 +19,14 @@ class Artist(SQLModel, table=True):
     followers_count: int | None = None
     base_name: str | None = None
     disambiguator: str | None = None
-    description: dict | None = Field(default=None, sa_column=Column(JSON))
+    # По умолчанию — первое имя из alternate_names (см. upsert_artist).
+    real_name: str | None = None
     description_preview: str | None = None
     translation_artist: bool | None = None
-    # True — только когда карточка загружена явным парсингом артиста
-    # (make parse artist <id> или make parse <id> для полного пайплайна).
-    # Артист, попавший в базу только как соавтор/фит/продюсер другой сущности,
-    # остаётся full=False, даже если его данные при этом достаточно подробные.
+    # True — по артисту спарсена вся дискография (make parse artist <id> или
+    # make parse <id>). Данные карточки пишутся полностью для любого артиста;
+    # full=False значит лишь "нашли по ходу парсинга чужой сущности".
+    # Флаг липкий: обратно в False автоматически не сбрасывается.
     full: bool = False
 
 
@@ -93,7 +94,6 @@ class Album(SQLModel, table=True):
     album_art_text_color: str | None = None
     song_pageviews: int | None = None
     updated_at: int | None = None
-    full: bool = False  # True = данные полные (пришли из /api/albums/{id}), не заглушка
 
 
 class AlbumSong(SQLModel, table=True):

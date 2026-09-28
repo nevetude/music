@@ -44,3 +44,4 @@ desktop.ini
 .vite/
 *.swp
 *.swo
+*.patch

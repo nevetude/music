@@ -39,6 +39,6 @@ def get_song_albums(session: Session, song_id: int) -> list[Album]:
     statement = (
         select(Album)
         .join(AlbumSong, AlbumSong.album_id == Album.id)
-        .where(AlbumSong.song_id == song_id, Album.full == True)  # noqa: E712
+        .where(AlbumSong.song_id == song_id)
     )
     return list(session.exec(statement).all())

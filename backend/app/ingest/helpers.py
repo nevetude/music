@@ -8,10 +8,21 @@ from sqlmodel import Session, SQLModel, select
 
 
 def upsert[ModelT: SQLModel](
-    session: Session, model: type[ModelT], pk: dict[str, Any], fields: dict[str, Any]
+    session: Session,
+    model: type[ModelT],
+    pk: dict[str, Any],
+    fields: dict[str, Any],
+    *,
+    skip_none: bool = False,
 ) -> ModelT:
     """Обновляет строку по первичному ключу или создаёт новую.
-    pk — словарь полей первичного ключа, например {"id": 42} или {"song_id": 1, "tag_id": 2}."""
+    pk — словарь полей первичного ключа, например {"id": 42} или {"song_id": 1, "tag_id": 2}.
+
+    skip_none=True — при обновлении существующей строки поля со значением None
+    не затирают уже сохранённые данные. Нужно для сущностей без флага full
+    (Artist, Album): одна и та же запись приходит и полной (из своего эндпоинта),
+    и урезанной (как вложенный объект в другой сущности) — урезанная не должна
+    обнулять то, что уже записано."""
     pk_value = tuple(pk.values())
     obj = session.get(model, pk_value if len(pk_value) > 1 else pk_value[0])
     if obj is None:
@@ -19,6 +30,8 @@ def upsert[ModelT: SQLModel](
         session.add(obj)
     else:
         for key, value in fields.items():
+            if skip_none and value is None:
+                continue
             setattr(obj, key, value)
     return obj
 
