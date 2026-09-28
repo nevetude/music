@@ -50,6 +50,7 @@ make parse 1994624            # полный пайплайн: артист -> �
 make parse artist 1994624     # только карточка артиста
 make parse song 581415        # только одна песня (её related-песни попадут как заглушки — это ок)
 make parse album 581407       # альбом + треклист + полные данные каждой песни в нём
+make parse 1994624 LOG=api    # режим логов: entities (по умолчанию, Artist-Album-Songs) | api (только запросы) | all
 ```
 
 Всё это — обёртки над `cd backend && uv run python -m app.ingest.cli ...`.

@@ -3,6 +3,7 @@ make parse 123          -> полный пайплайн по артисту 123
 make parse artist 123   -> только карточка артиста
 make parse song 124     -> только одна песня
 make parse album 125    -> альбом + треклист + все его песни
+make parse 123 LOG=api  -> то же, но выводить только API-запросы (LOG=entities|api|all)
 """
 
 import argparse
@@ -13,7 +14,7 @@ from collections.abc import Coroutine
 from typing import Any
 
 from . import commands
-from .log_format import setup_logging
+from .log_format import DEFAULT_LOG_MODE, LOG_MODES, setup_logging
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,6 @@ def build_coroutine(mode_or_id: str, entity_id: int | None) -> Coroutine:
 
 
 def main() -> None:
-    setup_logging()
     parser = argparse.ArgumentParser(description="Загрузка данных Genius в БД")
     parser.add_argument(
         "mode_or_id", help="id артиста (полный парсинг) или режим artist/song/album"
@@ -46,7 +46,14 @@ def main() -> None:
     parser.add_argument(
         "id", nargs="?", type=int, help="id сущности, если первым аргументом указан режим"
     )
+    parser.add_argument(
+        "--log",
+        choices=list(LOG_MODES),
+        default=DEFAULT_LOG_MODE,
+        help="что выводить: entities (Artist-Album-Songs), api (запросы), all",
+    )
     args = parser.parse_args()
+    setup_logging(args.log)
 
     try:
         coro = build_coroutine(args.mode_or_id, args.id)

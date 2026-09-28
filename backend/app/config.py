@@ -8,6 +8,12 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./genius.db"
     cors_origins: list[str] = ["http://localhost:5173"]
 
+    # Genius.com иногда отдаёт 403 на genius.com/api/... анонимным запросам
+    # (отдельные треки требуют залогиненной сессии). Если задать APP_GENIUS_COOKIE=
+    # значением заголовка Cookie из залогиненного браузера, ingest будет
+    # представляться этой сессией. См. ingest/genius_client.py.
+    genius_cookie: str | None = None
+
     model_config = SettingsConfigDict(env_file=".env", env_prefix="APP_")
 
 

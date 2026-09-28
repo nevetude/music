@@ -27,6 +27,35 @@ from .helpers import get_or_create, link, upsert
 
 logger = logging.getLogger(__name__)
 
+# ─────────── Учёт найденных сущностей (для догрузки полных данных) ───────────
+# Любой артист/альбом, встреченный как вложенный объект (соавтор, фит, альбом из тела
+# песни или из relationships), попадает в pending. commands.complete_discovered()
+# забирает их и догружает через /api/artists/{id} и /api/albums/{id}.
+# done — те, что уже получены полностью в этом запуске (повторно не тянем).
+_pending_artists: set[int] = set()
+_pending_albums: set[int] = set()
+_done_artists: set[int] = set()
+_done_albums: set[int] = set()
+
+
+def mark_albums_handled(ids: list[int]) -> None:
+    """Альбомы, которые вызывающий код загрузит сам (дискография в parse_full,
+    с полными песнями), — чтобы load_related не тянул их дважды."""
+    _done_albums.update(ids)
+
+
+def take_pending_artists() -> list[int]:
+    ids = sorted(_pending_artists - _done_artists)
+    _pending_artists.clear()
+    return ids
+
+
+def take_pending_albums() -> list[int]:
+    ids = sorted(_pending_albums - _done_albums)
+    _pending_albums.clear()
+    return ids
+
+
 # Поля-массивы артистов, которые НЕ входят в custom_performances,
 # но должны попасть в credits с соответствующей ролью.
 ROLE_FIELDS = {
@@ -40,7 +69,9 @@ ROLE_FIELDS = {
 # ─────────────────────────── Upsert базовых сущностей ───────────────────────────
 
 
-def upsert_artist(session: Session, data: dict, *, full: bool = False) -> None:
+def upsert_artist(
+    session: Session, data: dict, *, full: bool = False, complete: bool = False
+) -> None:
     """Сохраняет всё, что пришло про артиста, — независимо от источника.
 
     full — отдельный флаг "у этого артиста спарсена вся дискография" (True только
@@ -50,6 +81,9 @@ def upsert_artist(session: Session, data: dict, *, full: bool = False) -> None:
 
     Урезанная версия артиста не затирает уже сохранённые поля (skip_none), поэтому
     защита "если full — пропустить" больше не нужна.
+
+    complete=True — данные получены из /api/artists/{id} (не вложенный объект), догружать
+    не нужно. full=True подразумевает complete. Иначе артист попадает в pending.
 
     Логи сохранения артиста — только DEBUG, чтобы не шуметь поверх album/track логов."""
     name_components = data.get("name_components") or {}
@@ -72,6 +106,10 @@ def upsert_artist(session: Session, data: dict, *, full: bool = False) -> None:
     )
     if full:
         fields["full"] = True  # в остальных случаях не трогаем (новая строка = False)
+    if full or complete:
+        _done_artists.add(data["id"])
+    else:
+        _pending_artists.add(data["id"])
     upsert(session, Artist, {"id": data["id"]}, fields, skip_none=True)
     logger.debug("artist %s (%r) upserted: full=%s", data["id"], data.get("name"), full)
 
@@ -121,9 +159,14 @@ def upsert_song(session: Session, data: dict, *, full: bool) -> None:
     upsert(session, Song, {"id": data["id"]}, fields)
 
 
-def upsert_album(session: Session, data: dict) -> None:
+def upsert_album(session: Session, data: dict, *, complete: bool = False) -> None:
     """Флага full у альбомов нет: любой альбом пишется тем, что пришло, а урезанная
-    версия (вложенная в песню/relationships) не затирает уже сохранённые поля (skip_none)."""
+    версия (вложенная в песню/relationships) не затирает уже сохранённые поля (skip_none).
+    complete=True — данные из /api/albums/{id}; иначе альбом попадает в pending на догрузку."""
+    if complete:
+        _done_albums.add(data["id"])
+    else:
+        _pending_albums.add(data["id"])
     fields = dict(
         name=data.get("name"),
         full_title=data.get("full_title"),
@@ -298,7 +341,7 @@ def save_songs(songs: list[dict]) -> None:
 
 def ingest_album(session: Session, album: dict) -> None:
     """Полная загрузка одного объекта album (как из /api/albums/{id}) в БД."""
-    upsert_album(session, album)
+    upsert_album(session, album, complete=True)
     link_album_artists(session, album["id"], album.get("primary_artists", []))
     add_album_performances(session, album["id"], album.get("song_performances", []))
     add_album_relationships(session, album["id"], album.get("album_relationships", []))
@@ -332,6 +375,14 @@ def ingest_album_tracks(session: Session, album_id: int, tracks: list[dict]) -> 
 def save_album_tracks(album_id: int, tracks: list[dict]) -> None:
     with new_session() as session:
         ingest_album_tracks(session, album_id, tracks)
+        session.commit()
+
+
+def save_artist_details(artist: dict) -> None:
+    """Полная карточка артиста, найденного по ходу парсинга (НЕ явный парсинг):
+    пишем все поля, но full (дискография) не трогаем."""
+    with new_session() as session:
+        upsert_artist(session, artist, complete=True)
         session.commit()
 
 

@@ -11,9 +11,7 @@ def list_artists(session: Session) -> list[Artist]:
 def artist_ids_with_albums(session: Session) -> set[int]:
     """id артистов, у которых есть хотя бы один альбом. Для группировки на главной."""
     statement = (
-        select(AlbumArtist.artist_id)
-        .join(Album, Album.id == AlbumArtist.album_id)
-        .distinct()
+        select(AlbumArtist.artist_id).join(Album, Album.id == AlbumArtist.album_id).distinct()
     )
     return set(session.exec(statement).all())
 

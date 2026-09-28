@@ -7,6 +7,9 @@ ifeq (parse,$(firstword $(MAKECMDGOALS)))
   $(eval $(PARSE_ARGS):;@:)
 endif
 
+# Режим логов: make parse 123 LOG=api (entities | api | all)
+LOG ?= entities
+
 .PHONY: install dev web parse lint fix help
 
 help:
@@ -17,6 +20,7 @@ help:
 	@echo "make parse artist <id>   — только карточка артиста"
 	@echo "make parse song <id>     — только одна песня"
 	@echo "make parse album <id>    — альбом + треклист + все его песни"
+	@echo "  + LOG=entities|api|all  — что логировать: Artist-Album-Songs (по умолчанию) / только API-запросы / всё"
 	@echo "make lint                — ruff check + ruff format --check (backend)"
 	@echo "make fix                 — ruff check --fix + ruff format (backend)"
 
@@ -31,7 +35,7 @@ web:
 	cd frontend && bun --bun run dev
 
 parse:
-	cd backend && uv run python -m app.ingest.cli $(PARSE_ARGS)
+	cd backend && uv run python -m app.ingest.cli $(PARSE_ARGS) --log $(LOG)
 
 lint:
 	cd backend && uv run ruff check . && uv run ruff format --check .

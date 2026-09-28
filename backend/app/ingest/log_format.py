@@ -79,10 +79,39 @@ class ColorFormatter(logging.Formatter):
         return line
 
 
-def setup_logging(level: int = logging.INFO) -> None:
+# Режимы вывода (make parse ... LOG=<режим>):
+#   entities — только Artist → Album → Songs (логгер ingest.entities)
+#   api      — только HTTP-запросы к Genius (логгер ingest.api)
+#   all      — оба потока вместе
+# WARNING и выше (ошибки загрузки) показываются в любом режиме.
+LOG_MODES: dict[str, set[str] | None] = {
+    "entities": {"ingest.entities"},
+    "api": {"ingest.api"},
+    "all": None,
+}
+DEFAULT_LOG_MODE = "entities"
+
+
+class ModeFilter(logging.Filter):
+    def __init__(self, mode: str) -> None:
+        super().__init__()
+        self.allowed = LOG_MODES[mode]
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno >= logging.WARNING or self.allowed is None:
+            return True
+        return record.name in self.allowed
+
+
+def setup_logging(mode: str = DEFAULT_LOG_MODE, level: int = logging.INFO) -> None:
     """Настраивает root-логгер один раз, в точке входа CLI."""
     handler = logging.StreamHandler()
     handler.setFormatter(ColorFormatter())
+    handler.addFilter(ModeFilter(mode))
+
+    # httpx сам пишет INFO-строку на каждый запрос — у нас для этого свой ingest.api
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
 
     root = logging.getLogger()
     root.handlers.clear()

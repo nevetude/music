@@ -20,9 +20,19 @@ import httpx
 
 from ..database import init_db, new_session
 from . import genius_client as client
-from .pipeline import ingest_album, ingest_album_tracks, save_artist, save_songs
+from .pipeline import (
+    ingest_album,
+    ingest_album_tracks,
+    mark_albums_handled,
+    save_artist,
+    save_artist_details,
+    save_songs,
+    take_pending_albums,
+    take_pending_artists,
+)
 
-logger = logging.getLogger(__name__)
+# Имя нужно режиму логов `--log entities` (см. log_format.LOG_MODES)
+logger = logging.getLogger("ingest.entities")
 
 
 def log(text: str = "", *, indent: int = 0) -> None:
@@ -35,13 +45,50 @@ def log_header(text: str) -> None:
     logger.info(text, extra={"header": True})
 
 
+async def load_related(http_client: httpx.AsyncClient, indent: int = 0) -> None:
+    """Сразу загружает полные данные артистов и альбомов, которые только что
+    встретились как вложенные объекты. Вызывается после каждого шага сохранения
+    (артист, альбом, песни), а не одним проходом в конце. Альбомы — карточка +
+    треклист (песни остаются заглушками, полностью песни не тянем). Повторяется,
+    пока появляются новые (альбом из relationships может привести к новым
+    артистам/альбомам)."""
+    while True:
+        album_ids = take_pending_albums()
+        artist_ids = take_pending_artists()
+        if not album_ids and not artist_ids:
+            return
+
+        if album_ids:
+            log(f"related albums: {len(album_ids)}", indent=indent)
+            for album in await client.fetch_albums_with_client(http_client, album_ids):
+                with new_session() as session:
+                    ingest_album(session, album)
+                    session.commit()
+                try:
+                    tracks = await client.fetch_album_tracks(http_client, album["id"])
+                except Exception as exc:
+                    logger.error("album %s tracks: failed — %s", album.get("url"), exc)
+                else:
+                    with new_session() as session:
+                        ingest_album_tracks(session, album["id"], tracks)
+                        session.commit()
+                log(f"album: {album.get('url', album['id'])}", indent=indent + 1)
+
+        if artist_ids:
+            artists = await client.fetch_artists_with_client(http_client, artist_ids)
+            for artist in artists:
+                save_artist_details(artist)
+            log(f"related artists: {len(artists)}/{len(artist_ids)}", indent=indent)
+
+
 async def parse_artist(artist_id: int) -> None:
     """Только карточка артиста, без дискографии."""
     init_db()
     async with httpx.AsyncClient(timeout=15) as http_client:
         artist = await client.fetch_artist(http_client, artist_id)
-    save_artist(artist)
-    log(f"artist saved: {artist.get('url', artist_id)}")
+        save_artist(artist)
+        log(f"artist saved: {artist.get('url', artist_id)}")
+        await load_related(http_client)
 
 
 async def parse_song(song_id: int) -> None:
@@ -50,8 +97,9 @@ async def parse_song(song_id: int) -> None:
     init_db()
     async with httpx.AsyncClient(timeout=15) as http_client:
         song = await client.fetch_song(http_client, song_id)
-    save_songs([song])
-    log(f"track saved: {song.get('url', song_id)}")
+        save_songs([song])
+        log(f"track saved: {song.get('url', song_id)}")
+        await load_related(http_client)
 
 
 async def parse_album(album_id: int) -> None:
@@ -63,6 +111,7 @@ async def parse_album(album_id: int) -> None:
             ingest_album(session, album)
             session.commit()
         log(f"album saved: {album.get('url', album_id)}")
+        await load_related(http_client, indent=1)
 
         tracks = await client.fetch_album_tracks(http_client, album_id)
         with new_session() as session:
@@ -72,10 +121,11 @@ async def parse_album(album_id: int) -> None:
         song_ids = [t["song"]["id"] for t in tracks]
         songs = await client.fetch_songs_with_client(http_client, song_ids)
 
-    save_songs(songs)
-    for song in songs:
-        log(f"track: {song.get('url', song.get('id'))}", indent=1)
-    log(f"tracks saved: {len(songs)}/{len(song_ids)}", indent=1)
+        save_songs(songs)
+        for song in songs:
+            log(f"track: {song.get('url', song.get('id'))}", indent=1)
+        log(f"tracks saved: {len(songs)}/{len(song_ids)}", indent=1)
+        await load_related(http_client, indent=1)
 
 
 async def parse_full(artist_id: int) -> None:
@@ -87,9 +137,11 @@ async def parse_full(artist_id: int) -> None:
         artist = await client.fetch_artist(http_client, artist_id)
         save_artist(artist)
         log_header(artist.get("url", f"artist {artist_id}"))
+        await load_related(http_client)
 
         album_stubs = await client.fetch_artist_albums(http_client, artist_id)
         log(f"albums found: {len(album_stubs)}")
+        mark_albums_handled([a["id"] for a in album_stubs])
 
         total_albums_ok = 0
         total_songs_ok = 0
@@ -113,6 +165,7 @@ async def parse_full(artist_id: int) -> None:
                 ingest_album(session, album)
                 session.commit()
             log(f"[{i}/{len(album_stubs)}] {album.get('url', album_id)}")
+            await load_related(http_client, indent=1)
 
             tracks = await client.fetch_album_tracks(http_client, album_id)
             with new_session() as session:
@@ -126,6 +179,7 @@ async def parse_full(artist_id: int) -> None:
             for song in songs:
                 log(f"track: {song.get('url', song.get('id'))}", indent=1)
             log(f"tracks saved: {len(songs)}/{len(song_ids)}", indent=1)
+            await load_related(http_client, indent=1)
 
             total_songs_all += len(song_ids)
             total_songs_ok += len(songs)
