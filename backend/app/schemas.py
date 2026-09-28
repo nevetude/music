@@ -41,6 +41,7 @@ class AlbumListItem(BaseModel):
     album_type: str | None = None
     release_date: str | None = None
     cover_art_url: str | None = None
+    song_pageviews: int | None = None
     artists: list[ArtistBrief] = []
 
 

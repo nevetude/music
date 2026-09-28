@@ -2,7 +2,8 @@
   import { link } from "../lib/router.js";
   import { api } from "../lib/api.js";
   import { useApiResource } from "../lib/useApiResource.svelte.js";
-  import { formatReleaseDate } from "../lib/format.js";
+  import { formatReleaseDate, sortAlbums } from "../lib/format.js";
+  import AlbumCard from "../lib/AlbumCard.svelte";
 
   let { params } = $props();
 
@@ -15,6 +16,24 @@
   let song = $derived(songResource.data);
   let loading = $derived(songResource.loading);
   let error = $derived(songResource.error);
+
+  const DESCRIPTION_COLLAPSED_HEIGHT = 70;
+
+  let descRef = $state(null);
+  let descFullHeight = $state(0);
+  let descExpanded = $state(false);
+  let descNeedsToggle = $derived(descFullHeight > DESCRIPTION_COLLAPSED_HEIGHT + 4);
+
+  $effect(() => {
+    void song?.description_preview;
+    void descRef;
+
+    descExpanded = false;
+
+    queueMicrotask(() => {
+      if (descRef) descFullHeight = descRef.scrollHeight;
+    });
+  });
 </script>
 
 {#if loading}
@@ -91,9 +110,22 @@
       {#if song.description_preview}
         <article class="album-info">
           <h5>Description</h5>
-          <section class="description">
+
+          <div
+            class="description"
+            bind:this={descRef}
+            style="max-height: {descExpanded
+              ? descFullHeight + 'px'
+              : DESCRIPTION_COLLAPSED_HEIGHT + 'px'}"
+          >
             <p>{song.description_preview}</p>
-          </section>
+          </div>
+
+          {#if descNeedsToggle}
+            <button class="show-more-btn" onclick={() => (descExpanded = !descExpanded)}>
+              {descExpanded ? "Show less" : "Show more"}
+            </button>
+          {/if}
         </article>
       {/if}
 
@@ -112,12 +144,11 @@
       {#if song.albums.length > 0}
         <article class="album-info">
           <h5>Appears on</h5>
-          <p>
-            {#each song.albums as a, i (a.id)}
-              <a href="/albums/{a.id}" use:link target="_blank" rel="noopener">{a.name}</a
-              >{#if i < song.albums.length - 1}<span>,&nbsp;</span>{/if}
+          <div class="album-grid">
+            {#each sortAlbums(song.albums) as album (album.id)}
+              <AlbumCard {album} />
             {/each}
-          </p>
+          </div>
         </article>
       {/if}
 

@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 
 from ..deps import SessionDep
 from ..lookups import country_name, language_name
+from ..repository import albums as albums_repo
 from ..repository import songs as repo
 from ..schemas import AlbumListItem, ArtistBrief, SongDetail
 
@@ -21,5 +22,14 @@ def get_song(song_id: int, session: SessionDep):
         artists=[ArtistBrief.model_validate(a) for a in repo.get_song_artists(session, song_id)],
         genres=repo.get_song_genres(session, song_id),
         credits=repo.get_song_credits(session, song_id),
-        albums=[AlbumListItem(**a.model_dump()) for a in repo.get_song_albums(session, song_id)],
+        albums=[
+            AlbumListItem(
+                **a.model_dump(),
+                artists=[
+                    ArtistBrief.model_validate(ar)
+                    for ar in albums_repo.get_album_artists(session, a.id)
+                ],
+            )
+            for a in repo.get_song_albums(session, song_id)
+        ],
     )

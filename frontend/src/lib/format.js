@@ -97,3 +97,33 @@ export function groupAlbumsByType(albums) {
     albums: groups.get(key),
   }));
 }
+
+// ─────────────────────────── Сортировки ───────────────────────────
+
+const byName = (a, b) => a.name.localeCompare(b.name);
+
+/** Числовое поле по убыванию, пустые значения — в конец. */
+function byNumberDesc(field) {
+  return (a, b) => (b[field] ?? -1) - (a[field] ?? -1);
+}
+
+/** Артисты: "popularity" (по followers_count, по умолчанию) или "alphabet". */
+export function sortArtists(artists, mode = "popularity") {
+  const list = [...artists];
+  if (mode === "alphabet") return list.sort(byName);
+  return list.sort((a, b) => byNumberDesc("followers_count")(a, b) || byName(a, b));
+}
+
+/** Альбомы: "date" (новые сверху, без даты — в конце) или "popularity" (по song_pageviews). */
+export function sortAlbums(albums, mode = "date") {
+  const list = [...albums];
+  if (mode === "popularity") {
+    return list.sort((a, b) => byNumberDesc("song_pageviews")(a, b) || byName(a, b));
+  }
+  return list.sort((a, b) => {
+    if (!a.release_date && !b.release_date) return byName(a, b);
+    if (!a.release_date) return 1;
+    if (!b.release_date) return -1;
+    return b.release_date.localeCompare(a.release_date) || byName(a, b);
+  });
+}

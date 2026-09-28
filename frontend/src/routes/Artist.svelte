@@ -2,9 +2,10 @@
   import { link } from "../lib/router.js";
   import { api } from "../lib/api.js";
   import { useApiResource } from "../lib/useApiResource.svelte.js";
-  import { groupAlbumsByType, formatFollowers } from "../lib/format.js";
+  import { groupAlbumsByType, formatFollowers, sortAlbums } from "../lib/format.js";
   import { fitTrackRow } from "../lib/actions/fitTrackRow.js";
   import AlbumCard from "../lib/AlbumCard.svelte";
+  import SortSelect from "../lib/SortSelect.svelte";
 
   let { params } = $props();
 
@@ -48,8 +49,18 @@
     collabFilters[key] = !collabFilters[key];
   }
 
+  // Сортировка альбомов внутри секции: по дате выхода (по умолчанию) или по популярности.
+  const ALBUM_SORT_OPTIONS = [
+    { value: "date", label: "Release date" },
+    { value: "popularity", label: "Popularity" },
+  ];
+  let albumSortModes = $state({});
+
   function visibleAlbums(group) {
-    return collabFilters[group.key] ? group.albums.filter((a) => a.artists.length > 1) : group.albums;
+    const filtered = collabFilters[group.key]
+      ? group.albums.filter((a) => a.artists.length > 1)
+      : group.albums;
+    return sortAlbums(filtered, albumSortModes[group.key] ?? "date");
   }
 
   function hasCollab(group) {
@@ -186,15 +197,25 @@
     {#each albumGroups as group (group.key)}
       <section class="page-block">
         <div class="page-title-row">
-          <h3 class="page-title">{group.title}</h3>
-          {#if hasCollab(group)}
-            <button
-              class="collab-toggle"
-              class:active={collabFilters[group.key]}
-              onclick={() => toggleCollab(group.key)}
-            >
-              Collab
-            </button>
+          <div class="page-title-left">
+            <h3 class="page-title">{group.title}</h3>
+            {#if hasCollab(group)}
+              <button
+                class="collab-toggle"
+                class:active={collabFilters[group.key]}
+                onclick={() => toggleCollab(group.key)}
+              >
+                Collab
+              </button>
+            {/if}
+          </div>
+
+          {#if group.albums.length > 1}
+            <SortSelect
+              options={ALBUM_SORT_OPTIONS}
+              value={albumSortModes[group.key] ?? "date"}
+              onchange={(mode) => (albumSortModes[group.key] = mode)}
+            />
           {/if}
         </div>
 

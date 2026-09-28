@@ -687,6 +687,42 @@ abbr {
     margin-bottom: 0;
 }
 
+/* Заголовок + Collab-тумблер слева, выбор сортировки — справа */
+.page-title-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Расстояние между блоком tracklist/description и первой секцией страницы */
+.release-layout + .page-block {
+    margin-top: 8px;
+}
+
+.sort-select {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-meta);
+}
+
+.sort-select select {
+    padding: 4px 8px;
+    border: 1px solid var(--bg-hover);
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-main);
+    font: inherit;
+    cursor: pointer;
+    color-scheme: dark;
+}
+
+.sort-select select:hover {
+    background: var(--bg-hover);
+    color: var(--title);
+}
+
 .collab-toggle {
     padding: 4px 12px;
     border: 1px solid var(--bg-hover);

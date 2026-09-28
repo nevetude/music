@@ -58,12 +58,18 @@ def get_album_cover_arts(session: Session, album_id: int) -> list[AlbumCoverArt]
 
 
 def get_album_tracks(session: Session, album_id: int) -> list[dict]:
-    """Треки альбома в порядке диска/номера, с полным Song и списком продюсеров/фитов."""
+    """Треки альбома в порядке диска/номера (без номера — в конце), с полным Song и списком продюсеров/фитов."""
     statement = (
         select(AlbumSong, Song)
         .join(Song, Song.id == AlbumSong.song_id)
         .where(AlbumSong.album_id == album_id)
-        .order_by(AlbumSong.disc_number, AlbumSong.number)
+        # Треки без порядкового номера — в конец списка (в SQLite NULL при ASC идёт первым).
+        .order_by(
+            AlbumSong.number.is_(None),
+            AlbumSong.disc_number.is_(None),
+            AlbumSong.disc_number,
+            AlbumSong.number,
+        )
     )
     rows = session.exec(statement).all()
 
