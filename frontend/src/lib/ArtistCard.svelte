@@ -5,7 +5,7 @@
   let { artist } = $props();
 </script>
 
-<a href="/artists/{artist.id}" use:link target="_blank" rel="noopener" class="artist-card">
+<a href="/artists/{artist.id}" use:link class="artist-card">
   <div class="artist-card-avatar">
     {#if artist.image_url}
       <img src={artist.image_url} alt={artist.name} loading="lazy" />

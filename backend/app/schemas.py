@@ -29,7 +29,7 @@ class TrackItem(BaseModel):
     cover_thumbnail_url: str | None = None
     pageviews: int | None = None
     instrumental: bool | None = None
-    producers: list[str] = []
+    producers: list[ArtistBrief] = []
     featuring: list[str] = []
 
 

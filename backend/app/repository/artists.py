@@ -54,7 +54,7 @@ def get_artist_top_tracks(session: Session, artist_id: int, limit: int = 10) -> 
                 "pageviews": song.pageviews,
                 "instrumental": song.instrumental,
                 "producers": song_credits.get("Producer", []),
-                "featuring": song_credits.get("Feature", []),
+                "featuring": [c["name"] for c in song_credits.get("Feature", [])],
             }
         )
     return tracks

@@ -57,7 +57,7 @@
         <div class="release-header">
           <h2 class="release-title">
             {#if song.url}
-              <a href={song.url} target="_blank" rel="noreferrer">{song.title}</a>
+              <a href={song.url} rel="noreferrer">{song.title}</a>
             {:else}
               {song.title}
             {/if}
@@ -67,7 +67,7 @@
         {#if song.artists.length > 0}
           <p class="release-artist-line">
             {#each song.artists as artist, i (artist.id)}
-              <a href="/artists/{artist.id}" use:link target="_blank" rel="noopener" class="release-artist">{artist.name}</a
+              <a href="/artists/{artist.id}" use:link class="release-artist">{artist.name}</a
               >{#if i < song.artists.length - 1}<span>,&nbsp;</span>{/if}
             {/each}
           </p>
@@ -105,6 +105,10 @@
             <dd class="genres">{song.genres.join(", ")}</dd>
           {/if}
         </dl>
+
+        <div class="release-footer">
+          <span class="release-id">songs/{song.id}</span>
+        </div>
       </article>
 
       {#if song.description_preview}

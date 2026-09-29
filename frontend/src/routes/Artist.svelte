@@ -2,7 +2,7 @@
   import { link } from "../lib/router.js";
   import { api } from "../lib/api.js";
   import { useApiResource } from "../lib/useApiResource.svelte.js";
-  import { groupAlbumsByType, formatFollowers, sortAlbums } from "../lib/format.js";
+  import { groupAlbumsByType, formatFollowers, formatCompactNumber, sortAlbums } from "../lib/format.js";
   import { fitTrackRow } from "../lib/actions/fitTrackRow.js";
   import AlbumCard from "../lib/AlbumCard.svelte";
   import SortSelect from "../lib/SortSelect.svelte";
@@ -89,7 +89,7 @@
         <ol role="list" class="tracklist">
           {#each artist.top_tracks as track (track.song_id)}
             <li class="track">
-              <a href="/songs/{track.song_id}" use:link target="_blank" rel="noopener" class="track-link">
+              <a href="/songs/{track.song_id}" use:link class="track-link">
                 <span class="track-num">{track.number ?? ""}</span>
 
                 {#if track.cover_thumbnail_url}
@@ -110,9 +110,14 @@
                   </span>
 
                   {#if track.producers.length > 0}
-                    <span class="track-producer" title={track.producers.join(", ")}></span>
+                    <span
+                      class="track-producer"
+                      title={track.producers.map((p) => p.name).join(", ")}
+                    ></span>
                   {/if}
                 </div>
+
+                <span class="track-plays">{formatCompactNumber(track.pageviews) ?? ""}</span>
               </a>
             </li>
           {:else}
@@ -127,7 +132,7 @@
         <div class="release-header">
           <h2 class="release-title">
             {#if artist.url}
-              <a href={artist.url} target="_blank" rel="noreferrer">
+              <a href={artist.url} rel="noreferrer">
                 {artist.name}
               </a>
             {:else}
@@ -160,7 +165,7 @@
         </dl>
 
         <div class="release-footer">
-          <span class="release-id">#{artist.id}</span>
+          <span class="release-id">artists/{artist.id}</span>
         </div>
       </article>
 

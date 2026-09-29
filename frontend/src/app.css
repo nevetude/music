@@ -108,6 +108,7 @@ main {
 }
 
 header {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: flex-end;
@@ -116,17 +117,32 @@ header {
     padding: 0 16px;
     background: var(--bg-card);
 }
+ 
+/* Кликабельная область по центру шапки, без подписи — ведёт на главную.
+   Лежит под переключателем темы (z-index), чтобы тот не перестал работать. */
+.header-home-link {
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: 1000px;
+    max-width: 100%;
+    height: 100%;
+    transform: translateX(-50%);
+    z-index: 0;
+}
+ 
+.theme-switcher {
+    position: relative;
+    z-index: 1;
+}
 
 /* Ссылки */
 a {
     color: var(--text-main);
     text-decoration: none;
-    padding: 4px;
-    border-radius: 4px;
 }
 
 a:hover {
-    background-color: var(--bg-hover);
     color: var(--title);
 }
 
@@ -185,7 +201,6 @@ abbr {
 
 /* Tracklist */
 /* Tracklist */
-
 .release-tracklist {
     background: var(--bg-card);
     border-radius: 8px;
@@ -193,7 +208,7 @@ abbr {
 
 .tracklist {
     list-style: none;
-    padding: 8px;
+    /* padding: 8px; */
 }
 
 .track {
@@ -204,12 +219,10 @@ abbr {
 
 .track-link {
     display: grid;
-    grid-template-columns: 24px 28px minmax(0, 1fr);
+    grid-template-columns: 24px 28px minmax(0, 1fr) 42px;
     align-items: center;
-    padding: 10px 8px;
-    cursor: pointer;
-    color: inherit;
-    text-decoration: none;
+    gap: 4px;
+    padding: 10px 2px;
 }
 
 .track-link:hover,
@@ -224,11 +237,23 @@ abbr {
 .track-num {
     display: flex;
     justify-content: center;
-    align-items: center;
-    margin-right: 8px;
+    /* align-items: center; */
+    /* margin-right: 8px; */
     font-size: 11px;
     color: var(--text-soft);
 }
+
+.track-star {
+    width: 12px;
+    height: 12px;
+    color: var(--text-soft);
+}
+
+.track-star-top {
+    width: 14px;
+    height: 14px;
+}
+
 
 .tracklist-cover {
     width: 24px;
@@ -268,6 +293,14 @@ abbr {
     text-align: right;
     font-size: 12px;
     color: var(--text-meta);
+}
+
+.track-plays {
+    flex: 0 0 auto;
+    text-align: right;
+    font-size: 12px;
+    color: var(--text-meta);
+    font-variant-numeric: tabular-nums;
 }
 
 .track-instrumental {
@@ -661,14 +694,14 @@ abbr {
 
 /* Артист: квадратный аватар меньше обложки альбома/трека + тот же
    controls-блок, но подогнанный под ширину аватара. */
-.cover.cover-sm,
+/* .cover.cover-sm,
 .controls.controls-sm {
     width: 160px;
 }
 
 .cover.cover-sm {
     height: 160px;
-}
+} */
 
 .cover.cover-sm img {
     height: 100%;
@@ -749,9 +782,6 @@ abbr {
     color: var(--text-meta);
 }
 
-.release-artist-line {
-    display: block;
-}
 
 /* ─────────────────────────── Цвета обложки (primary/secondary) ─────────────────────────── */
 
@@ -764,7 +794,7 @@ abbr {
 
 .release-id {
     margin-left: auto;
-    font-size: 12px;
+    font-size: 13px;
     font-family: monospace;
     color: var(--text-soft);
 }
@@ -784,7 +814,7 @@ abbr {
 }
 
 .swatch-hex {
-    font-size: 12px;
+    font-size: 13px;
     font-family: monospace;
     color: var(--text-soft);
     /* text-transform: uppercase; */

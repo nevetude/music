@@ -1,0 +1,34 @@
+diff a/frontend/src/routes/Album.svelte b/frontend/src/routes/Album.svelte	(rejected hunks)
+@@ -95,7 +95,7 @@
+         <ol role="list" class="tracklist">
+           {#each album.tracks as track (track.song_id)}
+             <li class="track">
+-              <a href="/songs/{track.song_id}" use:link target="_blank" rel="noopener" class="track-link">
++              <a href="/songs/{track.song_id}" use:link class="track-link">
+                 <span class="track-num">{track.number ?? ""}</span>
+ 
+                 {#if track.cover_thumbnail_url}
+@@ -137,7 +139,7 @@
+         <div class="release-header">
+           <h2 class="release-title">
+             {#if album.url}
+-              <a href={album.url} target="_blank" rel="noreferrer">
++              <a href={album.url} rel="noreferrer">
+                 {album.name}
+               </a>
+             {:else}
+@@ -153,13 +155,7 @@
+         {#if album.artists.length > 0}
+           <p class="release-artist-line">
+             {#each album.artists as artist, i (artist.id)}
+-              <a
+-                href="/artists/{artist.id}"
+-                use:link
+-                target="_blank"
+-                rel="noopener"
+-                class="release-artist"
+-              >
++              <a href="/artists/{artist.id}" use:link class="release-artist">
+                 {artist.name}
+               </a>
+ 

@@ -2,7 +2,7 @@
   import { link } from "../lib/router.js";
   import { api } from "../lib/api.js";
   import { useApiResource } from "../lib/useApiResource.svelte.js";
-  import { formatReleaseDate } from "../lib/format.js";
+  import { formatReleaseDate, formatCompactNumber } from "../lib/format.js";
   import { fitTrackRow } from "../lib/actions/fitTrackRow.js";
 
   let { params } = $props();
@@ -12,6 +12,18 @@
   let album = $derived(albumResource.data);
   let loading = $derived(albumResource.loading);
   let error = $derived(albumResource.error);
+
+  // song_id -> место в топ-5 альбома по pageviews (1..5). Треки без pageviews
+  // в рейтинг не попадают — у них может не быть данных, а не низкая популярность.
+  let popularityRank = $derived(
+    new Map(
+      (album?.tracks ?? [])
+        .filter((track) => track.pageviews)
+        .toSorted((a, b) => b.pageviews - a.pageviews)
+        .slice(0, 5)
+        .map((track, i) => [track.song_id, i + 1]),
+    ),
+  );
 
   const DESCRIPTION_COLLAPSED_HEIGHT = 70;
 
@@ -94,9 +106,30 @@
       <section class="release-tracklist">
         <ol role="list" class="tracklist">
           {#each album.tracks as track (track.song_id)}
+            {@const rank = popularityRank.get(track.song_id)}
             <li class="track">
-              <a href="/songs/{track.song_id}" use:link target="_blank" rel="noopener" class="track-link">
-                <span class="track-num">{track.number ?? ""}</span>
+              <a href="/songs/{track.song_id}" use:link class="track-link">
+                <span class="track-num">
+                  {#if rank === 1}
+                    <svg class="track-star track-star-top" viewBox="0 0 16 16" aria-hidden="true">
+                      <path
+                        d="M8 1.2l2.02 4.31 4.66.63-3.4 3.27.82 4.69L8 11.8l-4.1 2.3.82-4.69-3.4-3.27 4.66-.63L8 1.2z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                  {:else if rank}
+                    <svg class="track-star" viewBox="0 0 16 16" aria-hidden="true">
+                      <path
+                        d="M8 1.2l2.02 4.31 4.66.63-3.4 3.27.82 4.69L8 11.8l-4.1 2.3.82-4.69-3.4-3.27 4.66-.63L8 1.2z"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.1"
+                      />
+                    </svg>
+                  {:else}
+                    {track.number ?? ""}
+                  {/if}
+                </span>
 
                 {#if track.cover_thumbnail_url}
                   <img
@@ -121,10 +154,12 @@
                   {#if track.producers.length > 0}
                     <span
                       class="track-producer"
-                      title={track.producers.join(", ")}
+                      title={track.producers.map((p) => p.name).join(", ")}
                     ></span>
                   {/if}
                 </div>
+
+                <span class="track-plays">{formatCompactNumber(track.pageviews) ?? ""}</span>
               </a>
             </li>
           {/each}
@@ -137,7 +172,7 @@
         <div class="release-header">
           <h2 class="release-title">
             {#if album.url}
-              <a href={album.url} target="_blank" rel="noreferrer">
+              <a href={album.url} rel="noreferrer">
                 {album.name}
               </a>
             {:else}
@@ -153,13 +188,7 @@
         {#if album.artists.length > 0}
           <p class="release-artist-line">
             {#each album.artists as artist, i (artist.id)}
-              <a
-                href="/artists/{artist.id}"
-                use:link
-                target="_blank"
-                rel="noopener"
-                class="release-artist"
-              >
+              <a href="/artists/{artist.id}" use:link class="release-artist">
                 {artist.name}
               </a>
 
@@ -228,7 +257,7 @@
               </div>
             {/if}
 
-            <span class="release-id">#{album.id}</span>
+            <span class="release-id">albums/{album.id}</span>
           </div>
         {/if}
       </article>

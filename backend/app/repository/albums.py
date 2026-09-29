@@ -90,21 +90,23 @@ def get_album_tracks(session: Session, album_id: int) -> list[dict]:
                 "pageviews": song.pageviews,
                 "instrumental": song.instrumental,
                 "producers": credits.get("Producer", []),
-                "featuring": credits.get("Feature", []),
+                "featuring": [c["name"] for c in credits.get("Feature", [])],
             }
         )
     return tracks
 
 
-def credits_by_song(session: Session, song_ids: list[int]) -> dict[int, dict[str, list[str]]]:
+def credits_by_song(session: Session, song_ids: list[int]) -> dict[int, dict[str, list[dict]]]:
+    """song_id -> {role: [{"id": artist_id, "name": ...}, ...]}. Отдаём id вместе с именем,
+    чтобы кредиты (продюсеры и т.п.) можно было превратить в ссылку на артиста."""
     if not song_ids:
         return {}
     statement = (
-        select(Credit.song_id, Credit.role, Artist.name)
+        select(Credit.song_id, Credit.role, Artist.id, Artist.name)
         .join(Artist, Artist.id == Credit.artist_id)
         .where(Credit.song_id.in_(song_ids))
     )
-    result: dict[int, dict[str, list[str]]] = defaultdict(lambda: defaultdict(list))
-    for song_id, role, name in session.exec(statement).all():
-        result[song_id][role].append(name)
+    result: dict[int, dict[str, list[dict]]] = defaultdict(lambda: defaultdict(list))
+    for song_id, role, artist_id, name in session.exec(statement).all():
+        result[song_id][role].append({"id": artist_id, "name": name})
     return {song_id: dict(roles) for song_id, roles in result.items()}

@@ -11,6 +11,7 @@
  * Требует реальный canvas.measureText(), поэтому чистым CSS не решается —
  * ужимать список продюсеров по словам (а не по буквам) без замера текста нельзя.
  *
+ * producers — [{ id, name }, ...] (ArtistBrief с бэкенда).
  * Использование: <div class="track-content" use:fitTrackRow={track.producers}>
  * с дочерними .track-title и .track-producer внутри node.
  */
@@ -35,7 +36,7 @@ export function fitTrackRow(node, producers) {
     const titleText = title.textContent.trim();
     const titleWidth = measure(title, titleText);
 
-    const firstProducer = producers[0];
+    const firstProducer = producers[0].name;
     const firstProducerWidth = measure(producer, firstProducer);
 
     const titleCanFit = titleWidth + gap + firstProducerWidth <= rowWidth;
@@ -53,7 +54,7 @@ export function fitTrackRow(node, producers) {
     let truncated = false;
 
     for (let i = 1; i < producers.length; i++) {
-      const candidate = `${visible}, ${producers[i]}`;
+      const candidate = `${visible}, ${producers[i].name}`;
       const hasMore = i < producers.length - 1;
 
       // Если после этого продюсера ещё кто-то останется,

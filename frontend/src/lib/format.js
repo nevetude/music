@@ -33,13 +33,16 @@ function getMeasureContext(font) {
  * никогда не показывает половину имени: либо оно целиком, либо его нет вообще.
  * Требует реальный canvas.measureText(), поэтому чистым CSS не решается.
  */
-/** Компактный формат числа подписчиков: 1234567 -> "1.2M", 3400 -> "3.4K". */
-export function formatFollowers(n) {
+/** Компактный формат числа: 1234567 -> "1.2M", 3400 -> "3.4K", 125 -> "125".
+ * Используется и для подписчиков, и для прослушиваний трека. */
+export function formatCompactNumber(n) {
   if (!n) return null;
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return String(n);
 }
+
+export const formatFollowers = formatCompactNumber;
 
 export function truncateNameList(names, maxWidthPx, font = "12px Roboto, system-ui, sans-serif") {
   if (!names || names.length === 0) return "";
