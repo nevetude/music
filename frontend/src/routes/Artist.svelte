@@ -39,14 +39,29 @@
 
   let stretchBlock = $derived(artist?.description_preview ? "description" : null);
 
-  // Секции дискографии по типу альбома (Albums / EPs / Singles / ...). "Collab" —
-  // фильтр внутри конкретной секции: показывает только альбомы, где у артиста
-  // есть соавторы (artists.length > 1). Ключ секции -> boolean.
+  // Секции дискографии по типу альбома (Albums / EPs / Singles / ...).
+  // Оба тумблера — переключатели видимости (checked = категория показана),
+  // а не "показать только это": по умолчанию Collab включён (коллаб-альбомы
+  // видны наравне со всеми), Unreleased выключен (такие релизы скрыты, пока
+  // не включат явно). Ключ секции -> boolean, отсутствие ключа = дефолт.
   let albumGroups = $derived(artist ? groupAlbumsByType(artist.albums) : []);
-  let collabFilters = $state({});
+  let showCollab = $state({});
+  let showUnreleased = $state({});
+
+  function isCollabVisible(key) {
+    return showCollab[key] ?? true;
+  }
+
+  function isUnreleasedVisible(key) {
+    return showUnreleased[key] ?? false;
+  }
 
   function toggleCollab(key) {
-    collabFilters[key] = !collabFilters[key];
+    showCollab[key] = !isCollabVisible(key);
+  }
+
+  function toggleUnreleased(key) {
+    showUnreleased[key] = !isUnreleasedVisible(key);
   }
 
   // Сортировка альбомов внутри секции: по дате выхода (по умолчанию) или по популярности.
@@ -57,14 +72,20 @@
   let albumSortModes = $state({});
 
   function visibleAlbums(group) {
-    const filtered = collabFilters[group.key]
-      ? group.albums.filter((a) => a.artists.length > 1)
-      : group.albums;
+    const filtered = group.albums.filter((album) => {
+      if (!isCollabVisible(group.key) && album.artists.length > 1) return false;
+      if (!isUnreleasedVisible(group.key) && album.status === "unreleased") return false;
+      return true;
+    });
     return sortAlbums(filtered, albumSortModes[group.key] ?? "date");
   }
 
   function hasCollab(group) {
     return group.albums.some((a) => a.artists.length > 1);
+  }
+
+  function hasUnreleased(group) {
+    return group.albums.some((a) => a.status === "unreleased");
   }
 </script>
 
@@ -139,23 +160,12 @@
               {artist.name}
             {/if}
           </h2>
-
-          {#if artist.is_verified}
-            <div class="album-ratings">
-              <span class="rating-badge">✓ Verified</span>
-            </div>
-          {/if}
         </div>
 
         <dl class="release-meta">
           {#if formatFollowers(artist.followers_count)}
             <dt>Followers</dt>
             <dd>{formatFollowers(artist.followers_count)}</dd>
-          {/if}
-
-          {#if artist.is_verified !== null && artist.is_verified !== undefined}
-            <dt>Verified</dt>
-            <dd>{artist.is_verified ? "Yes" : "No"}</dd>
           {/if}
 
           {#if artist.alternate_names.length > 0}
@@ -207,10 +217,19 @@
             {#if hasCollab(group)}
               <button
                 class="collab-toggle"
-                class:active={collabFilters[group.key]}
+                class:active={isCollabVisible(group.key)}
                 onclick={() => toggleCollab(group.key)}
               >
                 Collab
+              </button>
+            {/if}
+            {#if hasUnreleased(group)}
+              <button
+                class="collab-toggle"
+                class:active={isUnreleasedVisible(group.key)}
+                onclick={() => toggleUnreleased(group.key)}
+              >
+                Unreleased
               </button>
             {/if}
           </div>
@@ -225,7 +244,7 @@
         </div>
 
         {#if visibleAlbums(group).length === 0}
-          <p class="text-soft">No collaborative albums.</p>
+          <p class="text-soft">Nothing to show — try the toggles above.</p>
         {:else}
           <div class="album-grid">
             {#each visibleAlbums(group) as album (album.id)}

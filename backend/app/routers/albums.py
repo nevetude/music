@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 
 from ..deps import SessionDep
 from ..lookups import country_name, language_name
+from ..naming import display_name
 from ..repository import albums as repo
 from ..schemas import AlbumDetail, ArtistBrief, CoverArtItem, TrackItem
 
@@ -35,7 +36,11 @@ def get_album(album_id: int, session: SessionDep):
         language_name=language_name(album.language),
         country=country_name(album.language),
         label=label,
-        artists=[ArtistBrief.model_validate(a) for a in repo.get_album_artists(session, album_id)],
+        status=repo.album_status(album.release_date),
+        artists=[
+            ArtistBrief(id=a.id, name=display_name(a.name, a.base_name))
+            for a in repo.get_album_artists(session, album_id)
+        ],
         genres=repo.get_album_genres(session, album_id),
         tracks=[TrackItem(**t) for t in repo.get_album_tracks(session, album_id)],
         credits=credits,

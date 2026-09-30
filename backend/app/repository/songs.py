@@ -3,6 +3,7 @@ from collections import defaultdict
 from sqlmodel import Session, select
 
 from ..models import Album, AlbumSong, Artist, Credit, Song, SongArtist, Tag
+from ..naming import display_name
 
 
 def get_song(session: Session, song_id: int) -> Song | None:
@@ -25,13 +26,13 @@ def get_song_genres(session: Session, song_id: int) -> list[str]:
 
 def get_song_credits(session: Session, song_id: int) -> dict[str, list[str]]:
     statement = (
-        select(Credit.role, Artist.name)
+        select(Credit.role, Artist.name, Artist.base_name)
         .join(Artist, Artist.id == Credit.artist_id)
         .where(Credit.song_id == song_id)
     )
     grouped: dict[str, list[str]] = defaultdict(list)
-    for role, name in session.exec(statement).all():
-        grouped[role].append(name)
+    for role, name, base_name in session.exec(statement).all():
+        grouped[role].append(display_name(name, base_name))
     return dict(grouped)
 
 

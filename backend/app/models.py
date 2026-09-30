@@ -1,7 +1,6 @@
 """Единая схема БД: пишет ingest (парсер), читает read-API.
 Один файл моделей — единственный источник правды о структуре БД."""
 
-from sqlalchemy import JSON, Column
 from sqlmodel import Field, SQLModel
 
 
@@ -10,12 +9,9 @@ class Artist(SQLModel, table=True):
 
     id: int = Field(primary_key=True)
     name: str
-    slug: str | None = None
     url: str | None = None
     image_url: str | None = None
     header_image_url: str | None = None
-    is_verified: bool | None = None
-    is_meme_verified: bool | None = None
     followers_count: int | None = None
     base_name: str | None = None
     disambiguator: str | None = None
@@ -56,7 +52,6 @@ class Song(SQLModel, table=True):
     is_music: bool | None = None
     published: bool | None = None
     recording_location: str | None = None
-    description: dict | None = Field(default=None, sa_column=Column(JSON))
     description_preview: str | None = None
     header_image_url: str | None = None
     header_image_thumbnail_url: str | None = None
@@ -64,7 +59,6 @@ class Song(SQLModel, table=True):
     song_art_image_thumbnail_url: str | None = None
     song_art_primary_color: str | None = None
     song_art_secondary_color: str | None = None
-    song_art_text_color: str | None = None
     soundcloud_url: str | None = None
     youtube_url: str | None = None
     youtube_start: str | None = None
@@ -85,13 +79,10 @@ class Album(SQLModel, table=True):
     release_date: str | None = None
     language: str | None = None
     description_preview: str | None = None
-    custom_header_image_url: str | None = None
-    header_image_url: str | None = None
     cover_art_url: str | None = None
     cover_art_thumbnail_url: str | None = None
     album_art_primary_color: str | None = None
     album_art_secondary_color: str | None = None
-    album_art_text_color: str | None = None
     song_pageviews: int | None = None
     updated_at: int | None = None
 

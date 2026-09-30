@@ -8,7 +8,6 @@ class ArtistListItem(BaseModel):
     name: str
     image_url: str | None = None
     followers_count: int | None = None
-    is_verified: bool | None = None
     full: bool = False
     has_albums: bool = False
 
@@ -42,6 +41,8 @@ class AlbumListItem(BaseModel):
     release_date: str | None = None
     cover_art_url: str | None = None
     song_pageviews: int | None = None
+    # "released" | "unreleased" — вычисляется по release_date, см. repository/albums.py:album_status.
+    status: str = "released"
     artists: list[ArtistBrief] = []
 
 
@@ -78,6 +79,7 @@ class AlbumDetail(BaseModel):
     album_art_primary_color: str | None = None
     album_art_secondary_color: str | None = None
     song_pageviews: int | None = None
+    status: str = "released"
     artists: list[ArtistBrief] = []
     genres: list[str] = []
     tracks: list[TrackItem] = []

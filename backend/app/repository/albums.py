@@ -13,10 +13,16 @@ from ..models import (
     Song,
     Tag,
 )
+from ..naming import display_name
 
 
 def get_album(session: Session, album_id: int) -> Album | None:
     return session.get(Album, album_id)
+
+
+def album_status(release_date: str | None) -> str:
+    """Единственное правило пока: нет даты релиза -> unreleased."""
+    return "unreleased" if not release_date else "released"
 
 
 def get_album_artists(session: Session, album_id: int) -> list[Artist]:
@@ -42,13 +48,13 @@ def get_album_genres(session: Session, album_id: int) -> list[str]:
 def get_album_performances(session: Session, album_id: int) -> dict[str, list[str]]:
     """AlbumPerformance -> {role: [имена]}; роли Genius сохраняются как есть."""
     statement = (
-        select(AlbumPerformance.role, Artist.name)
+        select(AlbumPerformance.role, Artist.name, Artist.base_name)
         .join(Artist, Artist.id == AlbumPerformance.artist_id)
         .where(AlbumPerformance.album_id == album_id)
     )
     grouped: dict[str, list[str]] = defaultdict(list)
-    for role, name in session.exec(statement).all():
-        grouped[role].append(name)
+    for role, name, base_name in session.exec(statement).all():
+        grouped[role].append(display_name(name, base_name))
     return dict(grouped)
 
 
@@ -97,16 +103,18 @@ def get_album_tracks(session: Session, album_id: int) -> list[dict]:
 
 
 def credits_by_song(session: Session, song_ids: list[int]) -> dict[int, dict[str, list[dict]]]:
-    """song_id -> {role: [{"id": artist_id, "name": ...}, ...]}. Отдаём id вместе с именем,
-    чтобы кредиты (продюсеры и т.п.) можно было превратить в ссылку на артиста."""
+    """song_id -> {role: [{"id": artist_id, "name": ...}, ...]}. Отдаём id вместе с именем
+    (base_name, с откатом на name — см. naming.display_name), чтобы кредиты (продюсеры и
+    т.п.) можно было превратить в ссылку на артиста и показать под тем же именем, что и
+    везде на фронтенде."""
     if not song_ids:
         return {}
     statement = (
-        select(Credit.song_id, Credit.role, Artist.id, Artist.name)
+        select(Credit.song_id, Credit.role, Artist.id, Artist.name, Artist.base_name)
         .join(Artist, Artist.id == Credit.artist_id)
         .where(Credit.song_id.in_(song_ids))
     )
     result: dict[int, dict[str, list[dict]]] = defaultdict(lambda: defaultdict(list))
-    for song_id, role, artist_id, name in session.exec(statement).all():
-        result[song_id][role].append({"id": artist_id, "name": name})
+    for song_id, role, artist_id, name, base_name in session.exec(statement).all():
+        result[song_id][role].append({"id": artist_id, "name": display_name(name, base_name)})
     return {song_id: dict(roles) for song_id, roles in result.items()}

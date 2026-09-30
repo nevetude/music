@@ -281,8 +281,9 @@ abbr {
 }
 
 .track-feat {
-    color: #aaaaaa;
-    font-weight: normal;
+    font-size: 13px;
+    /* color: #aaaaaa; */
+    /* font-weight: normal; */
 }
 
 .track-producer {
