@@ -64,7 +64,7 @@ def get_album_cover_arts(session: Session, album_id: int) -> list[AlbumCoverArt]
 
 
 def get_album_tracks(session: Session, album_id: int) -> list[dict]:
-    """Треки альбома в порядке диска/номера (без номера — в конце), с полным Song и списком продюсеров/фитов."""
+    """Треки альбома в порядке диска/номера, с полным Song и списком продюсеров/фитов."""
     statement = (
         select(AlbumSong, Song)
         .join(Song, Song.id == AlbumSong.song_id)

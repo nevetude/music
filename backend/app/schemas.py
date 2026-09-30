@@ -41,7 +41,7 @@ class AlbumListItem(BaseModel):
     release_date: str | None = None
     cover_art_url: str | None = None
     song_pageviews: int | None = None
-    # "released" | "unreleased" — вычисляется по release_date, см. repository/albums.py:album_status.
+    # "released" | "unreleased" — вычисляется по release_date, см. repository/albums.py:album_status
     status: str = "released"
     artists: list[ArtistBrief] = []
 
